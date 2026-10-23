@@ -26,6 +26,8 @@ contract Demo is Script {
         address a = vm.addr(pkA);
         address b = vm.addr(pkB);
 
+        // Lectura intencional del archivo que generó Deploy; fs_permissions la limita a ./deployments
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         string memory json = vm.readFile(string.concat("./deployments/", vm.toString(block.chainid), ".json"));
         MockUSDC usdc = MockUSDC(vm.parseJsonAddress(json, ".MockUSDC"));
         TrustRondaFactory factory = TrustRondaFactory(vm.parseJsonAddress(json, ".TrustRondaFactory"));
