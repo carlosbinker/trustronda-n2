@@ -368,6 +368,7 @@ Las genera `make demo` (están en `broadcast/Demo.s.sol/11155111/run-latest.json
 - [`docs/slither.md`](docs/slither.md): informe de análisis estático.
 - [`docs/guion-video.md`](docs/guion-video.md): guion del video de 5 minutos.
 - [`docs/guia-entrega.md`](docs/guia-entrega.md): pasos para desplegar, verificar, publicar en GitHub y entregar.
+- [`docs/practica-remix.md`](docs/practica-remix.md): práctica guiada para jugar una ronda a mano en Remix VM.
 
 ## Licencia
 
