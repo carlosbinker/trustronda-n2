@@ -14,6 +14,12 @@ remappings = [
 ]
 fs_permissions = [{ access = "read-write", path = "./deployments" }]
 
+[lint]
+# Las variables immutable de TrustRonda (token, organizer, contributionAmount, ...) se dejan en camelCase a
+# propósito: son la API pública que lee el frontend y se leen como parámetros de la ronda, no como constantes.
+# Analizado y aceptado; ver README > "Warnings analizados".
+exclude_lints = ["screaming-snake-case-immutable"]
+
 [fuzz]
 runs = 512
 
