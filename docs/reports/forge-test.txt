@@ -1,0 +1,144 @@
+No files changed, compilation skipped
+
+Ran 4 tests for test/MockUSDC.t.sol:MockUSDCTest
+[PASS] test_Faucet_AfterCooldown() (gas: 88423)
+[PASS] test_Faucet_MintsAndEmits() (gas: 85948)
+[PASS] test_Metadata() (gas: 18800)
+[PASS] test_RevertWhen_FaucetDuringCooldown() (gas: 83661)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 936.44µs (441.97µs CPU time)
+
+Ran 3 tests for test/TrustRonda.fuzz.t.sol:TrustRondaFuzzTest
+[PASS] testFuzz_AllPay_EveryoneEndsEven(uint256,uint8) (runs: 512, μ: 4297497, ~: 2850837)
+[PASS] testFuzz_CannotCloseEarly(uint64) (runs: 512, μ: 1527988, ~: 1527661)
+[PASS] testFuzz_MoneyIsConserved(uint256,uint256,uint8,uint256) (runs: 512, μ: 3096689, ~: 2540661)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 3.38s (4.88s CPU time)
+
+Ran 37 tests for test/TrustRonda.t.sol:TrustRondaTest
+[PASS] test_Cancel_ByAnyoneAfterJoinDeadline() (gas: 1357448)
+[PASS] test_Cancel_ByOrganizerDuringJoin_RefundsCollateral() (gas: 1347136)
+[PASS] test_CloseRound_AllPaid_CreditsBeneficiary() (gas: 1635821)
+[PASS] test_CloseRound_DefaultWithoutCollateral_SmallerPot() (gas: 1709873)
+[PASS] test_CloseRound_Default_SlashesCollateral() (gas: 1604412)
+[PASS] test_CloseRound_LastRoundCompletes() (gas: 1900237)
+[PASS] test_CloseRound_NobodyPays_AllCollateralSlashed() (gas: 1533197)
+[PASS] test_Constructor_SetsParameters() (gas: 1224900)
+[PASS] test_Contribute_MarksPaymentAndEmits() (gas: 1530494)
+[PASS] test_FullCycle_AllPay_EveryoneEndsEven() (gas: 1854614)
+[PASS] test_Join_LastMemberStartsRonda() (gas: 1493805)
+[PASS] test_Join_RegistersMemberAndTakesCollateral() (gas: 1339238)
+[PASS] test_RevertWhen_CancelActiveRonda() (gas: 1488827)
+[PASS] test_RevertWhen_CancelByOutsiderBeforeDeadline() (gas: 1222770)
+[PASS] test_RevertWhen_CloseRoundEarlyWithMissingPayments() (gas: 1561130)
+[PASS] test_RevertWhen_CloseRoundNotActive() (gas: 1219665)
+[PASS] test_RevertWhen_ConstructorCollateralOverflowsUint128() (gas: 65313)
+[PASS] test_RevertWhen_ConstructorCollateralTooLow() (gas: 65279)
+[PASS] test_RevertWhen_ConstructorJoinWindowTooLong() (gas: 65303)
+[PASS] test_RevertWhen_ConstructorJoinWindowTooShort() (gas: 65272)
+[PASS] test_RevertWhen_ConstructorRoundTooLong() (gas: 65233)
+[PASS] test_RevertWhen_ConstructorRoundTooShort() (gas: 65182)
+[PASS] test_RevertWhen_ConstructorTooFewMembers() (gas: 65070)
+[PASS] test_RevertWhen_ConstructorTooManyMembers() (gas: 65110)
+[PASS] test_RevertWhen_ConstructorZeroContribution() (gas: 64500)
+[PASS] test_RevertWhen_ConstructorZeroOrganizer() (gas: 62350)
+[PASS] test_RevertWhen_ConstructorZeroToken() (gas: 62236)
+[PASS] test_RevertWhen_ContributeAfterDeadline() (gas: 1514164)
+[PASS] test_RevertWhen_ContributeBeforeStart() (gas: 1333165)
+[PASS] test_RevertWhen_ContributeNotMember() (gas: 1493024)
+[PASS] test_RevertWhen_ContributeTwice() (gas: 1549308)
+[PASS] test_RevertWhen_JoinAfterDeadline() (gas: 1252180)
+[PASS] test_RevertWhen_JoinFullRonda() (gas: 1516776)
+[PASS] test_RevertWhen_JoinTwice() (gas: 1356764)
+[PASS] test_RevertWhen_JoinWithoutApprove() (gas: 1296086)
+[PASS] test_RevertWhen_WithdrawNothing() (gas: 1491103)
+[PASS] test_Withdraw_PayoutDuringActiveRonda() (gas: 1618658)
+Suite result: ok. 37 passed; 0 failed; 0 skipped; finished in 6.78ms (5.88ms CPU time)
+
+Ran 10 tests for test/TrustRondaFactory.t.sol:TrustRondaFactoryTest
+[PASS] test_Constructor_AllowsInitialToken() (gas: 18391)
+[PASS] test_Constructor_WithoutInitialToken() (gas: 1770331)
+[PASS] test_CreateRonda_DeploysAndRegisters() (gas: 1227150)
+[PASS] test_DisallowedToken_DoesNotAffectExistingRondas() (gas: 1336828)
+[PASS] test_GetRondas_Pagination() (gas: 5957440)
+[PASS] test_RevertWhen_CreateRondaWithInvalidParams() (gas: 74948)
+[PASS] test_RevertWhen_CreateRondaWithTokenNotAllowed() (gas: 13420)
+[PASS] test_RevertWhen_SetTokenAllowedByNonOwner() (gas: 15940)
+[PASS] test_RevertWhen_SetTokenAllowedZero() (gas: 13252)
+[PASS] test_SetTokenAllowed_ByOwner() (gas: 32975)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 1.55ms (890.16µs CPU time)
+
+Ran 4 tests for test/invariant/TrustRonda.invariant.t.sol:TrustRondaInvariantTest
+[PASS] invariant_CollateralNeverGrows() (runs: 128, calls: 8192, reverts: 2)
+
+╭-------------------+------------+-------+---------+----------╮
+| Contract          | Selector   | Calls | Reverts | Discards |
++=============================================================+
+| TrustRondaHandler | cancel     | 1345  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | closeRound | 1342  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | contribute | 1359  | 2       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | join       | 1395  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | warp       | 1420  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | withdraw   | 1331  | 0       | 0        |
+╰-------------------+------------+-------+---------+----------╯
+
+[PASS] invariant_MembersNeverExceedCap() (runs: 128, calls: 8192, reverts: 0)
+
+╭-------------------+------------+-------+---------+----------╮
+| Contract          | Selector   | Calls | Reverts | Discards |
++=============================================================+
+| TrustRondaHandler | cancel     | 1344  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | closeRound | 1406  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | contribute | 1365  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | join       | 1354  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | warp       | 1378  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | withdraw   | 1345  | 0       | 0        |
+╰-------------------+------------+-------+---------+----------╯
+
+[PASS] invariant_RoundBounds() (runs: 128, calls: 8192, reverts: 1)
+
+╭-------------------+------------+-------+---------+----------╮
+| Contract          | Selector   | Calls | Reverts | Discards |
++=============================================================+
+| TrustRondaHandler | cancel     | 1326  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | closeRound | 1363  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | contribute | 1341  | 1       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | join       | 1340  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | warp       | 1425  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | withdraw   | 1397  | 0       | 0        |
+╰-------------------+------------+-------+---------+----------╯
+
+[PASS] invariant_SolvencyExact() (runs: 128, calls: 8192, reverts: 1)
+
+╭-------------------+------------+-------+---------+----------╮
+| Contract          | Selector   | Calls | Reverts | Discards |
++=============================================================+
+| TrustRondaHandler | cancel     | 1393  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | closeRound | 1441  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | contribute | 1308  | 1       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | join       | 1344  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | warp       | 1387  | 0       | 0        |
+|-------------------+------------+-------+---------+----------|
+| TrustRondaHandler | withdraw   | 1319  | 0       | 0        |
+╰-------------------+------------+-------+---------+----------╯
+
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 3.43s (5.16s CPU time)
+
+Ran 5 test suites in 3.43s (6.81s CPU time): 58 tests passed, 0 failed, 0 skipped (58 total tests)
