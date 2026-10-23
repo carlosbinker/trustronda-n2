@@ -368,7 +368,7 @@ contract TrustRonda is ReentrancyGuard {
         // Effects
         uint256 amount = contributionAmount;
         uint256 pot = uint256(paid) * amount;
-        uint8 defaults;
+        uint8 defaults = 0; // inicialización explícita (Slither: uninitialized-local)
 
         if (paid < n) {
             for (uint256 i; i < n;) {

@@ -31,7 +31,7 @@ contract TrustRondaFuzzTest is BaseTest {
         address[] memory users = new address[](members);
         uint256 perUser = collateral + contribution * members;
         for (uint256 i; i < members; ++i) {
-            users[i] = address(uint160(0x1000 + i));
+            users[i] = makeAddr(string.concat("member", vm.toString(i)));
             deal(address(usdc), users[i], perUser);
             _join(ronda, users[i]);
         }
@@ -73,7 +73,7 @@ contract TrustRondaFuzzTest is BaseTest {
         address[] memory users = new address[](members);
         uint256 perUser = contribution * (members + 1);
         for (uint256 i; i < members; ++i) {
-            users[i] = address(uint160(0x2000 + i));
+            users[i] = makeAddr(string.concat("payer", vm.toString(i)));
             deal(address(usdc), users[i], perUser);
             _join(ronda, users[i]);
         }

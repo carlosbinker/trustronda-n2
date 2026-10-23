@@ -1,0 +1,19 @@
+INFO:Detectors:
+Detector: timestamp
+MockUSDC.faucet() (contracts/MockUSDC.sol#38-46) uses timestamp for comparisons
+	Dangerous comparisons:
+	- last != 0 && block.timestamp < last + FAUCET_COOLDOWN (contracts/MockUSDC.sol#40)
+TrustRonda.join() (contracts/TrustRonda.sol#301-330) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > joinDeadline (contracts/TrustRonda.sol#303)
+TrustRonda.contribute() (contracts/TrustRonda.sol#334-352) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > deadline (contracts/TrustRonda.sol#339)
+TrustRonda.closeRound() (contracts/TrustRonda.sol#359-415) uses timestamp for comparisons
+	Dangerous comparisons:
+	- paid < n && block.timestamp <= deadline (contracts/TrustRonda.sol#366)
+TrustRonda.cancel() (contracts/TrustRonda.sol#420-426) uses timestamp for comparisons
+	Dangerous comparisons:
+	- msg.sender != organizer && block.timestamp <= joinDeadline (contracts/TrustRonda.sol#421)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+INFO:Slither:. analyzed (17 contracts with 102 detectors), 5 result(s) found
