@@ -1,0 +1,27 @@
+# Foundry
+out/
+cache/
+broadcast/*/31337/
+coverage/
+lcov.info
+report/
+
+# Secretos: NUNCA subir
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.local
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Python / slither
+__pycache__/
+crytic-export/
+
+# SO / editores
+.DS_Store
+.vscode/
+*.log
