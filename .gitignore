@@ -25,3 +25,6 @@ crytic-export/
 .DS_Store
 .vscode/
 *.log
+
+# Despliegues locales (anvil)
+deployments/31337.json
