@@ -22,7 +22,7 @@ slither:            ## Análisis estático (excluye librerías, tests y scripts)
 	slither . --filter-paths "lib|test|script" --exclude-dependencies
 
 slither-checklist:  ## Informe de Slither en formato checklist (como pidió el profesor)
-	slither . --filter-paths "lib|test|script" --exclude-dependencies --checklist > docs/reports/slither-checklist.md
+	slither . --filter-paths "lib|test|script" --exclude-dependencies --checklist > docs/reports/slither-checklist-raw.md
 
 deploy:             ## Despliega y verifica MockUSDC + TrustRondaFactory en Sepolia
 	forge script script/Deploy.s.sol --rpc-url sepolia --broadcast --verify -vvv

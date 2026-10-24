@@ -1,56 +1,68 @@
 # Análisis estático con Slither
 
 **Herramienta:** Slither 0.11.6 · solc 0.8.24 · 102 detectores
-**Alcance:** `contracts/` (MockUSDC, TrustRonda, TrustRondaFactory). Se excluyen `lib/` (OpenZeppelin, forge-std), `test/` y `script/` porque no son código propio desplegado.
+**Alcance:** `contracts/` (MockUSDC, TrustRonda, TrustRondaFactory, ITrustRondaDrawer). Quedan afuera `lib/` (OpenZeppelin, Chainlink, forge-std), `test/` y `script/`, porque no son código propio desplegado. El profesor indicó en la mentoría que lo que viene de OpenZeppelin queda fuera de alcance.
 
 ```bash
 slither . --filter-paths "lib|test|script" --exclude-dependencies
+# formato checklist, como pidió el profesor en la mentoría (clase 20, 0:58:56):
+slither . --filter-paths "lib|test|script" --exclude-dependencies --checklist > docs/reports/slither-checklist.md
 ```
 
-Salida completa: [`reports/slither.txt`](reports/slither.txt) · JSON: [`reports/slither.json`](reports/slither.json)
+Salidas: [`reports/slither.txt`](reports/slither.txt) · [`reports/slither-checklist.md`](reports/slither-checklist.md) · [`reports/slither.json`](reports/slither.json)
 
 ## Resumen
 
 | # | Detector | Severidad | Dónde | Estado |
 |---|---|---|---|---|
 | 1 | `uninitialized-local` | Medium | `TrustRonda.closeRound()` → `defaults` | **Corregido** |
-| 2 | `timestamp` | Low | `TrustRonda.join()` | Aceptado (justificado) |
-| 3 | `timestamp` | Low | `TrustRonda.contribute()` | Aceptado (justificado) |
-| 4 | `timestamp` | Low | `TrustRonda.closeRound()` | Aceptado (justificado) |
-| 5 | `timestamp` | Low | `TrustRonda.cancel()` | Aceptado (justificado) |
-| 6 | `timestamp` | Low | `MockUSDC.faucet()` | Aceptado (justificado) |
+| 2 | `unused-return` | Medium | `TrustRonda.join()` ignoraba el retorno de `requestDraw()` | **Corregido** |
+| 3 | `reentrancy-benign` | Low | `TrustRondaFactory.requestDraw()` | Aceptado (justificado) |
+| 4 | `reentrancy-events` | Low | `TrustRondaFactory.requestDraw()` | Aceptado (justificado) |
+| 5 a 9 | `timestamp` | Low | `join`, `contribute`, `closeRound`, `cancel` y `MockUSDC.faucet` | Aceptados (justificados) |
 
-Primera corrida: 6 findings. Después de la corrección: **5 findings, todos `timestamp` y aceptados**. No quedan findings de severidad High ni Medium.
+Corrida final: **7 findings, todos Low y aceptados**. No queda ningún High ni Medium.
 
 ## 1. `uninitialized-local`: corregido
+`uint8 defaults;` dentro de `closeRound()` se declaraba sin inicializar. En Solidity vale 0 por defecto, así que no era un bug, pero se inicializó explícitamente (`uint8 defaults = 0;`) para que la intención quede clara.
 
-`uint8 defaults;` dentro de `closeRound()` se declaraba sin inicializar. En Solidity vale 0 por defecto, así que no era un bug, pero Slither lo marca porque una variable sin inicializar suele ser un descuido. Se inicializó explícitamente (`uint8 defaults = 0;`) para que la intención quede clara y el reporte, limpio.
+## 2. `unused-return`: corregido
+Cuando se agregó Chainlink VRF, `requestDraw()` devolvía el `requestId` y la ronda no lo usaba. Ignorar un retorno puede esconder un error. Se cambió la interfaz: `requestDraw()` no devuelve nada, y el `requestId` queda registrado en la factory (`drawRequestOf(ronda)`) y en el evento `DrawRequested`.
 
-## 2 a 6. `timestamp`: aceptados
+## 3 y 4. `reentrancy-benign` / `reentrancy-events` en `requestDraw()`: aceptados
+Slither avisa que, después de llamar a `vrfCoordinator.requestRandomWords(...)`, se escriben `drawRequests` / `drawRequestOf` y se emite `DrawRequested`.
 
+**Por qué se aceptan:**
+- El `requestId` **lo genera el coordinador** y recién se conoce cuando vuelve la llamada. No hay forma de escribirlo antes.
+- El coordinador es el contrato oficial de Chainlink VRF v2.5, y su dirección es `immutable` en la factory: no lo puede cambiar nadie, ni el owner. No es un contrato arbitrario que pueda reentrar.
+- Aunque reentrara, `requestDraw` solo lo pueden llamar rondas creadas por la factory (`isRonda`), y una ronda solo lo llama una vez, desde `join()`, protegido con `nonReentrant`.
+- La respuesta de VRF llega en **otra transacción**, varios bloques después. No hay callback dentro de la misma llamada.
+
+## 5 a 9. `timestamp`: aceptados
 Slither avisa que se compara contra `block.timestamp`, porque el proposer del bloque puede correrlo unos segundos.
 
 **Por qué se aceptan:**
+- **Se usa para plazos, no para aleatoriedad.** Los vencimientos (inscripción, turno, timeout del sorteo y cooldown del faucet) son plazos de calendario. La aleatoriedad, que es donde `block.timestamp` sí sería peligroso, la da Chainlink VRF.
+- **El margen de manipulación no pesa frente a los plazos.** Los slots de Ethereum son de 12 s; los plazos mínimos del contrato son de 5 minutos y los típicos, de días.
+- **Ningún monto depende del tiempo.** El tiempo solo habilita o bloquea transiciones.
+- **Peor caso:** un proposer que además es miembro gana unos segundos para pagar, que es justamente lo que el contrato espera que haga.
 
-- **Es la herramienta correcta para un plazo.** Los vencimientos de una ronda (inscripción, turno, cooldown del faucet) son plazos de calendario, no fuentes de aleatoriedad. El apunte de la clase 14 desaconseja usar `block.timestamp` para **aleatoriedad** (para eso está VRF), no para plazos.
-- **El margen de manipulación es despreciable frente a los plazos.** Desde The Merge, en Ethereum los slots son fijos de 12 s y el timestamp no se puede mover de forma arbitraria. Los plazos mínimos del contrato son `MIN_DURATION = 5 minutes` y los típicos son días. Correr el reloj unos segundos no cambia quién llega a tiempo de forma significativa.
-- **Ningún monto depende del timestamp.** El tiempo solo habilita o bloquea transiciones: pagar, cerrar o cancelar. Ni el pozo ni la garantía se calculan con él.
-- **Peor caso analizado:** un proposer que además es miembro podría intentar que su aporte entre justo en el borde de `roundDeadline`. Ganaría unos segundos para pagar, que es exactamente lo que el contrato espera que haga (pagar). No puede evitar que se le ejecute la garantía si no paga.
-- **`MockUSDC.faucet()`:** el cooldown es solo una medida anti-spam de un token de prueba sin valor.
-
-## Revisión manual complementaria (más allá de Slither)
+## Revisión manual complementaria
 
 | Riesgo | Mitigación en el código |
 |---|---|
-| Reentrancy | CEI en `join`, `contribute` y `withdraw`, más `nonReentrant`. `closeRound` no hace llamadas externas. |
+| Reentrancy | CEI en `join`, `contribute` y `withdraw`, más `nonReentrant`. `closeRound` no hace llamadas externas. En `rawFulfillRandomWords` se borra el pedido antes de llamar a la ronda. |
+| Sorteo manipulable | Chainlink VRF con prueba verificada on-chain. Coordinador `immutable`, sin `setCoordinator`: por eso no se hereda `VRFConsumerBaseV2Plus`, que le daría al owner la posibilidad de cambiarlo y arreglar el sorteo. Callback solo del coordinador y entrega solo de la factory. |
+| VRF que no responde | `DRAW_TIMEOUT = 1 día`: después, cualquiera cancela y todos recuperan la garantía. |
+| Callback de VRF que revierte | `fulfillDraw` no revierte si la ronda ya no está en `Drawing`, y un requestId desconocido se ignora. El callback medido con 12 miembros está por debajo de 225 k de gas, contra un límite de 300 k. |
+| Gasto de la suscripción por terceros | `requestDraw` solo lo pueden llamar rondas creadas por la factory. |
 | Tokens raros (fee-on-transfer, rebasing) | Lista blanca de tokens en la factory (`setTokenAllowed`, solo el owner). |
 | Transferencias ERC20 que no revierten | `SafeERC20` (`safeTransfer` / `safeTransferFrom`). |
-| DoS por loops | Un único loop en `closeRound`, acotado por `MAX_MEMBERS = 12`; `getRondas` paginado. |
-| DoS por un receptor que revierte | Pull payments: cada uno retira lo suyo con `withdraw()`, nadie le "empuja" fondos a otro. |
-| Control de acceso | El organizador solo puede cancelar en `Open`; el owner de la factory solo maneja la lista blanca. Ninguno puede mover fondos. |
-| Fondos trabados | Cualquiera puede cancelar una ronda que no se llenó después de `joinDeadline`; cualquiera puede cerrar un turno vencido. |
-| Overflow / truncamiento | Solidity 0.8 con chequeo; `unchecked` solo en contadores acotados por 12; casts justificados y validados (`collateralAmount <= type(uint128).max`). |
+| DoS por loops | Loops acotados por `MAX_MEMBERS = 12`; `getRondas` paginado. |
+| DoS por un receptor que revierte o está en blacklist | Pull payments: cada uno retira lo suyo con `withdraw()`. Nadie le transfiere fondos a otro durante el flujo, así que una dirección bloqueada no traba la ronda (punto que remarcó el profesor en la mentoría). |
+| Control de acceso | El organizador solo puede cancelar en `Open`; el owner de la factory solo maneja la lista blanca. Ninguno puede mover fondos ni tocar el sorteo. |
+| Fondos trabados | Cancelación permisionless después de `joinDeadline` y del timeout de VRF; cierre permisionless de turnos vencidos. |
+| Overflow / truncamiento | Solidity 0.8; `unchecked` solo en contadores acotados; casts justificados y validados. |
 | `tx.origin`, `delegatecall`, `selfdestruct`, assembly | No se usan. |
-| Front-running / MEV | No hay precios ni swaps: el orden de cobro lo fija el orden de inscripción, que es público. Ver limitación en el README. |
 
-Además del análisis estático: 58 tests, incluida la invariante de solvencia exacta (`invariant_SolvencyExact`), y coverage del 100 %.
+Además del análisis estático: 70 tests (incluida la invariante de solvencia exacta y el fuzz de que el sorteo siempre es una permutación) y coverage del 100 %.
