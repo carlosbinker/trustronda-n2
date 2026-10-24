@@ -4,16 +4,18 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ITrustRondaDrawer} from "./interfaces/ITrustRondaDrawer.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// @notice Ciclo de vida de una ronda.
-/// @dev Open → Active → Completed, u Open → Cancelled. No hay otras transiciones.
+/// @dev Open → Drawing → Active → Completed; Open → Cancelled; Drawing → Cancelled (si VRF no responde a tiempo).
 enum RondaStatus {
     Open, //       inscripción abierta: se aceptan miembros con garantía
-    Active, //     cupo completo: corren los turnos de aporte y cobro
+    Drawing, //    cupo completo: se espera el número aleatorio de Chainlink VRF para sortear el orden
+    Active, //     orden sorteado: corren los turnos de aporte y cobro
     Completed, //  todos cobraron su turno: se libera la garantía
     Cancelled //   no se llenó a tiempo o la canceló el organizador: se devuelve la garantía
 }
@@ -71,6 +73,14 @@ error RoundExpired(uint64 deadline);
 /// @param deadline Timestamp a partir del cual se puede cerrar igual.
 error RoundStillOpen(uint64 deadline);
 
+/// @notice Solo la factory que creó la ronda puede entregar el resultado del sorteo.
+/// @param caller Cuenta que llamó.
+error NotFactory(address caller);
+
+/// @notice El sorteo todavía puede llegar: la ronda solo se puede cancelar después del timeout.
+/// @param availableAt Timestamp a partir del cual cualquiera puede cancelar.
+error DrawStillPending(uint64 availableAt);
+
 /// @notice La cuenta no tiene nada para retirar.
 /// @param account Cuenta que llamó.
 error NothingToWithdraw(address account);
@@ -84,15 +94,18 @@ error NotAuthorizedToCancel(address caller, uint64 joinDeadline);
 /// @author Carlos Binker
 /// @notice Ronda de ahorro rotativo (ROSCA, "pasanaku", "tanda") sin intermediario de confianza.
 ///         N miembros depositan una garantía al inscribirse. En cada turno todos aportan el mismo monto
-///         y el pozo lo cobra un miembro distinto, en orden de inscripción. Si alguien no paga a tiempo,
+///         y el pozo lo cobra un miembro distinto, en un orden sorteado con Chainlink VRF. Si alguien no paga a tiempo,
 ///         su aporte se cubre ejecutando su garantía, así el beneficiario del turno cobra igual.
 /// @dev Roles y privilegios:
 ///      - `organizer`: quien creó la ronda desde la factory. Su ÚNICO privilegio es cancelarla mientras
 ///        está en `Open`. No puede mover fondos, cambiar parámetros ni el orden de cobro.
 ///      - Miembros: se inscriben, aportan y retiran lo propio.
-///      - Cualquier cuenta: puede cerrar un turno cuando corresponde (`closeRound`) y cancelar una ronda
-///        que no se llenó antes de `joinDeadline`. Así la ronda nunca depende de que alguien en particular
-///        esté presente (en el roadmap, Chainlink Automation hace de keeper).
+///      - `factory`: el contrato que la creó. Su ÚNICO privilegio es entregar el número aleatorio del sorteo
+///        (`fulfillDraw`), que a su vez solo puede venir del coordinador de Chainlink VRF.
+///      - Cualquier cuenta: puede cerrar un turno cuando corresponde (`closeRound`), cancelar una ronda
+///        que no se llenó antes de `joinDeadline` y cancelar una ronda cuyo sorteo no llegó en `DRAW_TIMEOUT`.
+///        Así la ronda nunca depende de que alguien en particular esté presente (en el roadmap, Chainlink
+///        Automation hace de keeper).
 ///      Seguridad: CEI en todas las funciones, `nonReentrant` en las que transfieren tokens, SafeERC20,
 ///      pull payments para pozos y garantías, y loops acotados por `MAX_MEMBERS`.
 contract TrustRonda is ReentrancyGuard {
@@ -104,7 +117,8 @@ contract TrustRonda is ReentrancyGuard {
 
     /// @notice Datos de cada miembro, empaquetados en un solo slot de storage (128 + 8 + 8 + 8 bits).
     /// @param collateral Garantía que le queda depositada.
-    /// @param position Turno en el que cobra (0 = primero), igual a su orden de inscripción.
+    /// @param position Turno en el que cobra (0 = primero). Hasta el sorteo es el orden de inscripción; después,
+    ///        el lugar que le tocó en el sorteo de Chainlink VRF.
     /// @param defaults Cantidad de turnos que no pagó a tiempo.
     /// @param isMember true si está inscripto.
     struct MemberInfo {
@@ -130,6 +144,10 @@ contract TrustRonda is ReentrancyGuard {
     /// @notice Duración máxima de un turno y de la inscripción.
     uint64 public constant MAX_DURATION = 90 days;
 
+    /// @notice Tiempo máximo de espera del sorteo. Si Chainlink VRF no responde en este plazo, cualquiera puede
+    ///         cancelar la ronda y los miembros recuperan su garantía.
+    uint64 public constant DRAW_TIMEOUT = 1 days;
+
     // ─────────────────────────────────────────────────────────────────────
     // Variables de estado inmutables (se fijan en el constructor)
     // ─────────────────────────────────────────────────────────────────────
@@ -139,6 +157,9 @@ contract TrustRonda is ReentrancyGuard {
 
     /// @notice Cuenta que creó la ronda; solo puede cancelarla mientras está en `Open`.
     address public immutable organizer;
+
+    /// @notice Contrato que desplegó la ronda (`TrustRondaFactory`): pide el sorteo a Chainlink VRF y entrega el resultado.
+    ITrustRondaDrawer public immutable factory;
 
     /// @notice Monto que aporta cada miembro en cada turno.
     uint256 public immutable contributionAmount;
@@ -156,7 +177,7 @@ contract TrustRonda is ReentrancyGuard {
     uint8 public immutable maxMembers;
 
     // ─────────────────────────────────────────────────────────────────────
-    // Variables de estado (las cuatro primeras comparten un slot: 8 + 8 + 8 + 64 bits)
+    // Variables de estado (las cinco primeras comparten un slot: 8 + 8 + 8 + 64 + 64 bits)
     // ─────────────────────────────────────────────────────────────────────
 
     /// @notice Estado actual de la ronda.
@@ -168,10 +189,13 @@ contract TrustRonda is ReentrancyGuard {
     /// @notice Cuántos miembros ya pagaron el turno en curso.
     uint8 public paidCount;
 
-    /// @notice Timestamp de vencimiento del turno en curso (0 mientras la ronda está en `Open`).
+    /// @notice Timestamp de vencimiento del turno en curso (0 mientras la ronda está en `Open` o `Drawing`).
     uint64 public roundDeadline;
 
-    /// @notice Miembros en orden de inscripción; `_members[i]` cobra en el turno `i`.
+    /// @notice Timestamp en que se completó el cupo y se pidió el sorteo (0 antes de eso).
+    uint64 public drawRequestedAt;
+
+    /// @notice Miembros. Antes del sorteo, en orden de inscripción; después, en el orden sorteado: `_members[i]` cobra en el turno `i`.
     address[] private _members;
 
     /// @notice Datos de cada miembro.
@@ -193,7 +217,16 @@ contract TrustRonda is ReentrancyGuard {
     /// @param collateral Garantía depositada.
     event MemberJoined(address indexed member, uint8 indexed position, uint256 collateral);
 
-    /// @notice Se completó el cupo y arrancó el primer turno.
+    /// @notice Se completó el cupo y se pidió el sorteo del orden a Chainlink VRF (vía la factory).
+    /// @param drawRequestedAt Timestamp del pedido; desde ahí corre `DRAW_TIMEOUT`.
+    event RondaFull(uint64 drawRequestedAt);
+
+    /// @notice Llegó el número aleatorio de Chainlink VRF y quedó sorteado el orden de cobro.
+    /// @param randomWord Número aleatorio verificable usado para el sorteo.
+    /// @param order Miembros en el orden en que cobran.
+    event PayoutOrderDrawn(uint256 randomWord, address[] order);
+
+    /// @notice Quedó sorteado el orden y arrancó el primer turno.
     /// @param firstDeadline Vencimiento del primer turno.
     event RondaStarted(uint64 firstDeadline);
 
@@ -255,7 +288,7 @@ contract TrustRonda is ReentrancyGuard {
     // Constructor
     // ─────────────────────────────────────────────────────────────────────
 
-    /// @notice Crea una ronda en estado `Open`. Normalmente lo llama `TrustRondaFactory`.
+    /// @notice Crea una ronda en estado `Open`. Normalmente lo llama `TrustRondaFactory`, que queda como `factory`.
     /// @param organizer_ Cuenta organizadora (la que pidió crear la ronda).
     /// @param token_ Token ERC20 de los aportes.
     /// @param contributionAmount_ Aporte por miembro y por turno.
@@ -282,6 +315,7 @@ contract TrustRonda is ReentrancyGuard {
         if (joinWindow_ < MIN_DURATION || joinWindow_ > MAX_DURATION) revert InvalidDuration(joinWindow_);
 
         organizer = organizer_;
+        factory = ITrustRondaDrawer(msg.sender);
         token = token_;
         contributionAmount = contributionAmount_;
         collateralAmount = collateralAmount_;
@@ -296,8 +330,9 @@ contract TrustRonda is ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────
 
     /// @notice Se inscribe en la ronda depositando `collateralAmount`. Requiere `approve` previo.
-    /// @dev Si con esta inscripción se completa el cupo, la ronda pasa a `Active` y arranca el turno 0.
-    ///      CEI: chequeos → registro del miembro y cambio de estado → `safeTransferFrom`.
+    /// @dev Si con esta inscripción se completa el cupo, la ronda pasa a `Drawing` y le pide a la factory el
+    ///      sorteo del orden con Chainlink VRF. El primer turno arranca cuando llega el resultado (`fulfillDraw`).
+    ///      CEI: chequeos → registro del miembro y cambio de estado → `safeTransferFrom` y `requestDraw`.
     function join() external nonReentrant inStatus(RondaStatus.Open) {
         // Checks
         if (block.timestamp > joinDeadline) revert JoinWindowClosed(joinDeadline);
@@ -317,16 +352,55 @@ contract TrustRonda is ReentrancyGuard {
         info.collateral = uint128(collateralAmount);
         emit MemberJoined(msg.sender, position, collateralAmount);
 
-        if (position + 1 == maxMembers) {
-            uint64 deadline = uint64(block.timestamp) + roundDuration;
-            status = RondaStatus.Active;
-            roundDeadline = deadline;
-            emit RondaStarted(deadline);
-            emit NewRound(0, deadline);
+        bool full = position + 1 == maxMembers;
+        if (full) {
+            uint64 now_ = uint64(block.timestamp);
+            status = RondaStatus.Drawing;
+            drawRequestedAt = now_;
+            emit RondaFull(now_);
         }
 
         // Interactions
         token.safeTransferFrom(msg.sender, address(this), collateralAmount);
+        if (full) factory.requestDraw(); // factory → Chainlink VRF (contratos confiables e inmutables)
+    }
+
+    /// @notice Recibe el número aleatorio de Chainlink VRF, sortea el orden de cobro y arranca el turno 0.
+    /// @dev Solo la `factory`, que a su vez solo acepta la llamada del coordinador de VRF. Si la ronda ya no está en
+    ///      `Drawing` (por ejemplo, se canceló por timeout) no hace nada y NO revierte: un callback de VRF que revierte
+    ///      no se reintenta y solo desperdicia el pago.
+    ///      Sorteo: Fisher-Yates en memoria, derivando un índice por paso con `keccak256(randomWord, i)`, y una sola
+    ///      escritura por miembro en storage. El loop está acotado por `MAX_MEMBERS`.
+    /// @param randomWord Número aleatorio verificable entregado por Chainlink VRF.
+    function fulfillDraw(uint256 randomWord) external {
+        if (msg.sender != address(factory)) revert NotFactory(msg.sender);
+        if (status != RondaStatus.Drawing) return;
+
+        address[] memory order = _members; // una lectura del array a memoria
+        uint256 n = order.length;
+        for (uint256 i = n - 1; i > 0;) {
+            uint256 j = uint256(keccak256(abi.encode(randomWord, i))) % (i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
+            unchecked {
+                --i;
+            }
+        }
+        for (uint256 i; i < n;) {
+            _members[i] = order[i];
+            // casting to 'uint8' is safe because i < n <= MAX_MEMBERS (12)
+            // forge-lint: disable-next-line(unsafe-typecast)
+            _memberInfo[order[i]].position = uint8(i);
+            unchecked {
+                ++i;
+            }
+        }
+
+        uint64 deadline = uint64(block.timestamp) + roundDuration;
+        status = RondaStatus.Active;
+        roundDeadline = deadline;
+        emit PayoutOrderDrawn(randomWord, order);
+        emit RondaStarted(deadline);
+        emit NewRound(0, deadline);
     }
 
     /// @notice Paga el aporte del turno en curso. Requiere `approve` previo por `contributionAmount`.
@@ -414,12 +488,21 @@ contract TrustRonda is ReentrancyGuard {
         }
     }
 
-    /// @notice Cancela la ronda mientras está en `Open`.
-    /// @dev El organizador puede cancelar en cualquier momento de la inscripción; cualquier otra cuenta,
-    ///      solo después de `joinDeadline`, para que la garantía de los inscriptos nunca quede trabada.
-    function cancel() external inStatus(RondaStatus.Open) {
-        if (msg.sender != organizer && block.timestamp <= joinDeadline) {
-            revert NotAuthorizedToCancel(msg.sender, joinDeadline);
+    /// @notice Cancela una ronda que no arrancó: en `Open`, o en `Drawing` si el sorteo no llegó a tiempo.
+    /// @dev En `Open`, el organizador puede cancelar en cualquier momento de la inscripción y cualquier otra cuenta
+    ///      solo después de `joinDeadline`. En `Drawing`, cualquiera puede cancelar después de `DRAW_TIMEOUT` (por
+    ///      ejemplo, si la suscripción de VRF se quedó sin fondos). Así la garantía nunca queda trabada.
+    function cancel() external {
+        RondaStatus s = status;
+        if (s == RondaStatus.Open) {
+            if (msg.sender != organizer && block.timestamp <= joinDeadline) {
+                revert NotAuthorizedToCancel(msg.sender, joinDeadline);
+            }
+        } else if (s == RondaStatus.Drawing) {
+            uint64 availableAt = drawRequestedAt + DRAW_TIMEOUT;
+            if (block.timestamp <= availableAt) revert DrawStillPending(availableAt);
+        } else {
+            revert InvalidStatus(RondaStatus.Open, s);
         }
         status = RondaStatus.Cancelled;
         emit RondaCancelled(msg.sender);
