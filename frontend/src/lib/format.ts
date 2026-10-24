@@ -13,7 +13,7 @@ export const txUrl = (hash: string) => (EXPLORER ? `${EXPLORER}/tx/${hash}` : ""
 export const addrUrl = (addr: string) => (EXPLORER ? `${EXPLORER}/address/${addr}#code` : "");
 
 /** Estados del enum RondaStatus, en el mismo orden que en Solidity. */
-export const STATUS = ["Inscripción abierta", "En curso", "Terminada", "Cancelada"] as const;
+export const STATUS = ["Inscripción abierta", "Sorteando el orden", "En curso", "Terminada", "Cancelada"] as const;
 
 export function fmtDuration(seconds: number) {
   if (seconds <= 0) return "vencido";

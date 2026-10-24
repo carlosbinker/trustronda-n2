@@ -33,6 +33,7 @@ export default function RondaDetail({ address }: { address: Address }) {
       { ...ronda, functionName: "organizer" },
       { ...ronda, functionName: "getMembers" },
       { ...ronda, functionName: "roundDuration" },
+      { ...ronda, functionName: "drawRequestedAt" },
     ],
   });
   const d = base.data?.map((x) => x.result);
@@ -47,6 +48,8 @@ export default function RondaDetail({ address }: { address: Address }) {
   const organizer = d?.[8] as Address | undefined;
   const members = (d?.[9] as readonly Address[] | undefined) ?? [];
   const roundDuration = Number(d?.[10] ?? 0n);
+  const drawRequestedAt = Number(d?.[11] ?? 0n);
+  const DRAW_TIMEOUT = 86400; // TrustRonda.DRAW_TIMEOUT
 
   // 2) Detalle por miembro: si pagó el turno en curso y sus impagos
   const perMember = useReadContracts({
@@ -82,7 +85,9 @@ export default function RondaDetail({ address }: { address: Address }) {
   }
 
   const isMember = !!myInfo?.isMember;
-  const isOpen = status === 0, isActive = status === 1;
+  // Mismo orden que el enum RondaStatus de Solidity
+  const isOpen = status === 0, isDrawing = status === 1, isActive = status === 2;
+  const drawExpired = isDrawing && now > drawRequestedAt + DRAW_TIMEOUT;
   const expired = isActive && now > roundDeadline;
   const iPaid = isMember && seats[myInfo!.position]?.paid;
   const beneficiary = isActive ? members[currentRound] : undefined;
@@ -125,7 +130,7 @@ export default function RondaDetail({ address }: { address: Address }) {
       </button>,
     );
   }
-  if (me && isOpen && (me.toLowerCase() === organizer?.toLowerCase() || now > joinDeadline)) {
+  if (me && ((isOpen && (me.toLowerCase() === organizer?.toLowerCase() || now > joinDeadline)) || drawExpired)) {
     actions.push(
       <button key="cancel" className="btn ghost" disabled={tx.busy}
         onClick={() => tx.run([{ label: "Cancelar ronda", request: { ...ronda, functionName: "cancel" } }])}>
@@ -135,11 +140,13 @@ export default function RondaDetail({ address }: { address: Address }) {
   }
 
   const hint = !me ? "Conectá tu wallet para participar."
-    : isOpen && isMember ? `Ya estás inscripto: cobrás en el turno ${myInfo!.position + 1}. Falta completar el cupo.`
+    : isOpen && isMember ? "Ya estás inscripto. Cuando se complete el cupo, Chainlink VRF sortea el orden de cobro."
+    : isDrawing && !drawExpired ? "Cupo completo: Chainlink VRF está sorteando el orden de cobro. Suele tardar uno o dos minutos."
+    : drawExpired ? "El sorteo no llegó a tiempo: cualquiera puede cancelar la ronda y liberar las garantías."
+    : isActive && isMember && myInfo ? `Te tocó cobrar en el turno ${myInfo.position + 1}.${iPaid && paidCount < maxMembers ? ` Ya pagaste; faltan ${maxMembers - paidCount} aportes.` : ""}`
     : isOpen && now > joinDeadline ? "La inscripción venció sin completar el cupo."
-    : isActive && iPaid && !expired && paidCount < maxMembers ? `Ya pagaste. Faltan ${maxMembers - paidCount} aportes.`
     : isActive && !isMember ? "No sos miembro de esta ronda: podés cerrar el turno cuando corresponda."
-    : status === 2 ? "La ronda terminó." : status === 3 ? "La ronda está cancelada." : "";
+    : status === 3 ? "La ronda terminó." : status === 4 ? "La ronda está cancelada." : "";
 
   return (
     <div className="detail">
@@ -166,12 +173,16 @@ export default function RondaDetail({ address }: { address: Address }) {
                 <span className={expired ? "err" : ""}>{expired ? "Vencido" : `Vence en ${fmtDuration(roundDeadline - now)}`}</span>
                 <span className="muted">{paidCount} de {maxMembers} pagaron</span>
               </>}
+              {isDrawing && <>
+                <span className="round drawing">Sorteando el orden</span>
+                <span className="muted">con Chainlink VRF</span>
+              </>}
               {isOpen && <>
                 <span className="round">{members.length} de {maxMembers} inscriptos</span>
                 <span className="muted">Inscripción hasta {fmtDate(joinDeadline)}</span>
               </>}
-              {status === 2 && <span className="round">Terminada</span>}
-              {status === 3 && <span className="round">Cancelada</span>}
+              {status === 3 && <span className="round">Terminada</span>}
+              {status === 4 && <span className="round">Cancelada</span>}
             </>
           }
         />

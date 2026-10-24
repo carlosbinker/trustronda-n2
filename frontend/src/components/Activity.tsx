@@ -9,8 +9,10 @@ type Args = Record<string, unknown>;
 
 function describe(name: string, a: Args): string {
   switch (name) {
-    case "MemberJoined": return `${short(a.member as string)} se inscribió y cobra en el turno ${Number(a.position) + 1}`;
-    case "RondaStarted": return "Se completó el cupo: arrancó la ronda";
+    case "MemberJoined": return `${short(a.member as string)} se inscribió (inscripción n.º ${Number(a.position) + 1})`;
+    case "RondaFull": return "Se completó el cupo: se pidió el sorteo a Chainlink VRF";
+    case "PayoutOrderDrawn": return `Chainlink VRF sorteó el orden: ${(a.order as string[]).map((m, i) => `${i + 1}. ${short(m)}`).join(", ")}`;
+    case "RondaStarted": return "Arrancó la ronda";
     case "NewRound": return `Arrancó el turno ${Number(a.round) + 1}`;
     case "ContributionMade": return `${short(a.member as string)} pagó ${fmtUsd(a.amount as bigint)} (turno ${Number(a.round) + 1})`;
     case "CollateralSlashed": return `Se ejecutaron ${fmtUsd(a.amount as bigint)} de la garantía de ${short(a.member as string)}`;

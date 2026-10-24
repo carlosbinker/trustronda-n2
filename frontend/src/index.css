@@ -90,7 +90,10 @@ input, select { width: 100%; min-width: 0; font: inherit; color: var(--ink); bac
 .ronda-row .small { grid-column: 2 / 4; color: var(--muted); }
 .ronda-row .muted { font-size: 0.85rem; text-align: right; }
 .dot { width: 10px; height: 10px; border-radius: 50%; grid-row: span 2; }
-.dot.s0 { background: var(--amber); } .dot.s1 { background: var(--teal); } .dot.s2 { background: var(--muted); } .dot.s3 { background: var(--brick); }
+.dot.s0 { background: var(--amber); } .dot.s1 { background: var(--amber); outline: 2px solid var(--teal); } .dot.s2 { background: var(--teal); } .dot.s3 { background: var(--muted); } .dot.s4 { background: var(--brick); }
+.drawing { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .drawing { animation: none; } }
 
 /* Detalle */
 .detail { display: flex; flex-direction: column; gap: 1rem; }

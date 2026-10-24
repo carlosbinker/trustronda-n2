@@ -43,6 +43,19 @@ export const trustRondaAbi = [
   },
   {
     "type": "function",
+    "name": "DRAW_TIMEOUT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_DURATION",
     "inputs": [],
     "outputs": [
@@ -165,6 +178,45 @@ export const trustRondaAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "drawRequestedAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "factory",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract ITrustRondaDrawer"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "fulfillDraw",
+    "inputs": [
+      {
+        "name": "randomWord",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -508,6 +560,25 @@ export const trustRondaAbi = [
   },
   {
     "type": "event",
+    "name": "PayoutOrderDrawn",
+    "inputs": [
+      {
+        "name": "randomWord",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "order",
+        "type": "address[]",
+        "indexed": false,
+        "internalType": "address[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RondaCancelled",
     "inputs": [
       {
@@ -523,6 +594,19 @@ export const trustRondaAbi = [
     "type": "event",
     "name": "RondaCompleted",
     "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RondaFull",
+    "inputs": [
+      {
+        "name": "drawRequestedAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
     "anonymous": false
   },
   {
@@ -623,6 +707,17 @@ export const trustRondaAbi = [
   },
   {
     "type": "error",
+    "name": "DrawStillPending",
+    "inputs": [
+      {
+        "name": "availableAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidCollateral",
     "inputs": [
       {
@@ -704,6 +799,17 @@ export const trustRondaAbi = [
         "name": "joinDeadline",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotFactory",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },
