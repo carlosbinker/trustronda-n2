@@ -11,12 +11,12 @@ Un solo repositorio contiene los contratos (Foundry) y el frontend (React):
 | Carpeta | Qué hay | Herramienta |
 |---|---|---|
 | `contracts/` | Los 3 contratos Solidity | `forge build` |
-| `test/` | 58 tests | `forge test`, `forge coverage` |
+| `test/` | 70 tests | `forge test`, `forge coverage` |
 | `script/` | Deploy, demo y verificación | `forge script`, `cast` |
 | `deployments/` | Direcciones por red (JSON) | lo escribe `Deploy.s.sol` |
 | `frontend/` | La dApp | `npm run dev` |
 | `docs/` | Whitepaper, Slither, esta guía, guion | — |
-| `lib/` | OpenZeppelin v5.1.0 y forge-std como submódulos git | `git submodule` |
+| `lib/` | OpenZeppelin v5.1.0, Chainlink contracts 1.3.0 y forge-std como submódulos git | `git submodule` |
 
 `foundry.toml` define `src = "contracts"` porque el enunciado pide la carpeta `/contracts` (Foundry usa `src/` por defecto), fija `solc 0.8.24` con optimizer en 200 runs y lee el RPC y la API key de Etherscan **desde variables de entorno**. Así no hay secretos en el repo.
 
@@ -61,11 +61,13 @@ Licencia → pragma → imports → **tipos y errores a nivel de archivo** → c
 
 ### 2.2 La máquina de estados
 ```solidity
-enum RondaStatus { Open, Active, Completed, Cancelled }
+enum RondaStatus { Open, Drawing, Active, Completed, Cancelled }
 ```
 Toda función empieza validando el estado con el modifier `inStatus(...)`. Si no coincide, revierte con `InvalidStatus(expected, actual)`, que dice qué se esperaba y qué había: muy útil para depurar.
 
-### 2.3 Custom errors (14)
+`Drawing` es el estado intermedio en el que se espera el número aleatorio de Chainlink VRF para sortear el orden (ver la Parte 3b).
+
+### 2.3 Custom errors (16)
 Van definidos **fuera del contrato**, a nivel de archivo, como indica el orden de la clase 3. Cuestan menos gas que un `require` con string y llevan parámetros:
 `RoundStillOpen(uint64 deadline)` le dice al usuario **desde cuándo** se va a poder cerrar el turno.
 
@@ -81,7 +83,7 @@ uint8 public paidCount;      // │ (8 + 8 + 8 + 64 = 88 bits)
 uint64 public roundDeadline; // ┘
 ```
 - `immutable`: los parámetros de la ronda no cambian nunca. Esto da **garantía de reglas fijas**, que es el punto del producto, y lecturas baratas.
-- **Empaquetado:** cuando se cierra un turno, las cuatro variables se actualizan escribiendo un solo slot.
+- **Empaquetado:** `status`, `currentRound`, `paidCount`, `roundDeadline` y `drawRequestedAt` comparten un slot. Cuando se cierra un turno se actualizan escribiendo un solo slot.
 - `uint64` alcanza para timestamps hasta el año ~584 mil millones.
 
 ```solidity
@@ -93,8 +95,8 @@ mapping(address => uint256) private _payouts;                     // pozos por r
 ```
 El estado es `private` con getters `view` (recomendación de la clase 3: se controla el acceso).
 
-### 2.5 Eventos (9)
-`MemberJoined`, `RondaStarted`, `ContributionMade`, `CollateralSlashed`, `RoundClosed`, `NewRound`, `RondaCompleted`, `RondaCancelled` y `Withdrawn`. Las direcciones y los turnos van `indexed` para poder filtrarlos. **El frontend arma el historial on-chain solo con estos eventos.**
+### 2.5 Eventos (11)
+`MemberJoined`, `RondaFull`, `PayoutOrderDrawn`, `RondaStarted`, `ContributionMade`, `CollateralSlashed`, `RoundClosed`, `NewRound`, `RondaCompleted`, `RondaCancelled` y `Withdrawn`. Las direcciones y los turnos van `indexed` para poder filtrarlos. **El frontend arma el historial on-chain solo con estos eventos.**
 
 ### 2.6 Constructor: validar todo una sola vez
 Valida direcciones no nulas, aporte > 0, garantía ≥ aporte (y que entre en `uint128`), cupo entre 2 y 12, y duraciones entre 5 minutos y 90 días. Si algo falla, revierte con un error específico. La factory **no duplica** estas validaciones: si el constructor revierte, revierte toda la transacción de `createRonda`.
@@ -111,16 +113,18 @@ function join() external nonReentrant inStatus(RondaStatus.Open) {
     _members.push(msg.sender);
     info.isMember = true; info.position = position; info.collateral = uint128(collateralAmount);
     emit MemberJoined(msg.sender, position, collateralAmount);
-    if (position + 1 == maxMembers) { status = Active; roundDeadline = now + roundDuration; ... }
+    bool full = position + 1 == maxMembers;
+    if (full) { status = Drawing; drawRequestedAt = now; emit RondaFull(now); }
     // Interactions
     token.safeTransferFrom(msg.sender, address(this), collateralAmount);
+    if (full) factory.requestDraw();              // → Chainlink VRF
 }
 ```
 - **CEI estricto:** la transferencia, que es la llamada externa, va **al final**.
 - **`nonReentrant`**: segunda capa, por si el token tuviera hooks.
 - **`safeTransferFrom` (SafeERC20)**: revierte aunque el token devuelva `false` en vez de revertir.
 - **`storage` vs `memory`**: `MemberInfo storage info` apunta al storage real, así que asignarle valores lo modifica sin copiar.
-- **Arranque automático:** el último inscripto pone la ronda en `Active`. No hace falta que nadie más lo active.
+- **Pedido automático del sorteo:** el último inscripto pone la ronda en `Drawing` y dispara el pedido a Chainlink VRF. Cuando llega el número, la ronda se activa sola (Parte 3b).
 
 ### 2.8 `contribute()`: aporte del turno
 Cachea `currentRound` y `roundDeadline` en variables locales (una lectura de storage cada una), chequea plazo y doble pago, marca `_hasPaid` e incrementa `paidCount` dentro de `unchecked`. Es seguro porque nunca supera 12, y ahorra el chequeo de overflow. La transferencia va al final.
@@ -178,6 +182,29 @@ function createRonda(...) external returns (address ronda) {
 
 ---
 
+## Parte 3b: Chainlink VRF, el sorteo del orden de cobro
+
+**Por qué:** en una ronda, cobrar primero equivale a un préstamo sin interés y cobrar último, a ahorrar. Si el orden lo decide alguien, o un valor que alguien puede influir como `block.timestamp` o `blockhash`, se puede arreglar. Cristian lo dijo en la mentoría [0:33:44]: sin una conexión real con otro contrato "no llegaría a la dificultad que pretendemos en el curso. Pero si vos sacás un VRF con Chainlink, el proyecto va bien". VRF (*Verifiable Random Function*) entrega un número aleatorio junto con una **prueba criptográfica** que el coordinador verifica on-chain antes de entregarlo.
+
+**El circuito (cuatro llamadas entre contratos):**
+```
+1. último join()  →  TrustRonda pasa a Drawing  →  factory.requestDraw()
+2. factory  →  VRFCoordinator.requestRandomWords(keyHash, subId, 3 confirmaciones, 300k gas, 1 número)
+   … unos bloques después, el oráculo de Chainlink responde en OTRA transacción …
+3. VRFCoordinator  →  factory.rawFulfillRandomWords(requestId, [número])
+4. factory  →  ronda.fulfillDraw(número)  →  sorteo Fisher-Yates  →  Active, arranca el turno 1
+```
+
+**Decisiones de diseño:**
+- **La factory es el único consumidor** de la suscripción. Si cada ronda fuera consumidor, habría que agregarla a la suscripción a mano cada vez que se crea una.
+- **Coordinador `immutable` y sin heredar `VRFConsumerBaseV2Plus`.** La base de Chainlink trae `setCoordinator`, con el que el owner podría apuntar a un coordinador falso y "elegir" el número. Implementamos `rawFulfillRandomWords` con la misma firma y el chequeo `msg.sender == vrfCoordinator`.
+- **`requestDraw` solo para rondas propias** (`isRonda`): nadie de afuera puede gastar el saldo de la suscripción.
+- **`fulfillDraw` nunca revierte por estado.** Si la ronda ya se canceló, no hace nada. Un callback de VRF que revierte no se reintenta y solo desperdicia el pago.
+- **Timeout:** si VRF no responde en `DRAW_TIMEOUT` (1 día), por ejemplo porque la suscripción se quedó sin LINK, cualquiera puede cancelar y todos recuperan su garantía.
+- **Fisher-Yates en memoria:** se copia el array a `memory`, se mezcla derivando un índice por paso con `keccak256(randomWord, i) % (i + 1)` y se escribe una vez por miembro. Con 12 miembros, el callback consume menos de 225 k de gas.
+
+**En los tests** se usa el mock oficial `VRFCoordinatorV2_5Mock`: `createSubscription`, `fundSubscription`, `addConsumer(subId, factory)` y, para "ser el oráculo", `fulfillRandomWords(requestId, factory)` o `fulfillRandomWordsWithOverride` con un número elegido por el fuzzer. `testFuzz_DrawIsPermutation` prueba que, para cualquier número y cualquier cupo, el resultado es una permutación exacta de los inscriptos.
+
 ## Parte 4: Los tests
 
 ### 4.1 `BaseTest.sol`
@@ -200,7 +227,7 @@ function createRonda(...) external returns (address ronda) {
 - `afterInvariant()` imprime cuántas veces se ejecutó cada acción, para comprobar que el fuzzer llegó a rondas completas.
 
 ### 4.5 Coverage
-`forge coverage --no-match-coverage "(script|test)"` da **100 % en las cuatro métricas**. El checklist pide > 40 %.
+`forge coverage --no-match-coverage "(script|test|lib)"` da **100 % en las cuatro métricas**. El checklist pide > 40 %.
 
 ---
 
@@ -237,8 +264,10 @@ Se probó de punta a punta con Playwright contra anvil, con dos cuentas.
 ## Preguntas probables en la corrección (y respuestas cortas)
 
 - **¿Por qué no transferís el pozo en `closeRound`?** Por pull payments: si el beneficiario fuera un contrato que revierte, bloquearía la ronda. Además, `closeRound` queda sin llamadas externas.
-- **¿Dónde está la interacción entre contratos?** La factory despliega `TrustRonda` con `new`, y `TrustRonda` llama al ERC20 con SafeERC20.
+- **¿Dónde está la interacción entre contratos?** En varios lugares: la factory despliega `TrustRonda` con `new`; la ronda le pide el sorteo a la factory, que llama al coordinador externo de **Chainlink VRF**; el coordinador responde a la factory, que se lo pasa a la ronda; y la ronda mueve el ERC20 con SafeERC20.
 - **¿Por qué no usaste un proxy?** Porque el valor del producto es que las reglas no cambien a mitad de la ronda. Un proxy le daría a alguien el poder de cambiarlas.
 - **¿Qué pasa si nadie cierra el turno?** Lo puede cerrar cualquiera, y el beneficiario tiene todo el incentivo. En la fase 2 lo hace Chainlink Automation.
-- **¿Por qué el orden es por inscripción y no VRF?** Para priorizar un flujo completo y robusto en el MVP, como pidió el profesor. VRF está en el roadmap, con el riesgo (front-running del `join`) documentado.
+- **¿Por qué VRF y no `block.timestamp` o `blockhash` para sortear?** Porque esos valores los puede influir quien produce el bloque, y además se conocen antes. VRF entrega un número con prueba criptográfica que nadie puede elegir ni anticipar.
+- **¿Qué pasa si Chainlink no responde?** La ronda queda en `Drawing`. Después de 1 día, cualquiera llama a `cancel()` y todos retiran su garantía con `withdraw()`.
+- **¿Por qué no heredaste `VRFConsumerBaseV2Plus`?** Por su `setCoordinator`: le daría al owner el poder de cambiar el coordinador y arreglar el sorteo. Con el coordinador `immutable`, ese privilegio no existe.
 - **¿Es seguro el `unchecked`?** Sí: solo envuelve contadores que nunca superan 12 y una resta en la que `slashed ≤ available` está garantizado.

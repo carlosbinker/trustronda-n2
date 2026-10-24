@@ -51,7 +51,20 @@ En la pestaña **Deploy & Run Transactions**:
 
 Tip: copiá las dos direcciones (con el ícono de copiar al lado del selector) en un bloc de notas, porque las vas a pegar varias veces.
 
-## Paso 4: Desplegar el token y la factory (con la cuenta A)
+## Paso 4: Desplegar el oráculo simulado, el token y la factory (con la cuenta A)
+
+**4.0. Chainlink VRF simulado (mock oficial)**
+En Remix VM no existe Chainlink, así que usamos el mock que trae Chainlink para tests y hacemos de oráculo a mano.
+1. Crear `VRFMock.sol` con una sola línea de import (Remix lo baja de npm):
+   ```solidity
+   // SPDX-License-Identifier: MIT
+   pragma solidity ^0.8.24;
+   import "@chainlink/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
+   ```
+   Compilarlo y, en *Contract*, elegir **`VRFCoordinatorV2_5Mock`**. Si Remix no resuelve `@chainlink/contracts`, probá con `@chainlink/contracts@1.3.0/src/...`.
+2. **Deploy** con `_baseFee = 100000000000000000`, `_gasPrice = 1000000000`, `_weiPerUnitLink = 4000000000000000`. **Copiá la dirección** (es `VRF`).
+3. `createSubscription` → transact. Para obtener el id: botón azul `getActiveSubscriptionIds(0, 10)` → copiá el número largo (es `SUB_ID`).
+4. `fundSubscription(SUB_ID, 1000000000000000000000)` → la suscripción queda con fondos de mentira.
 
 **4.1. MockUSDC**
 - Contract: `MockUSDC`. Botón **Deploy** (no lleva argumentos).
@@ -61,7 +74,12 @@ Tip: copiá las dos direcciones (con el ícono de copiar al lado del selector) e
 - Contract: `TrustRondaFactory`. Al lado de Deploy, desplegá los campos:
   - `initialOwner`: dirección de la **cuenta A**
   - `initialToken`: dirección de **USDC**
-- **Deploy** → aparece `TRUSTRONDAFACTORY AT 0x…`.
+  - `vrfCoordinator_`: dirección de **VRF**
+  - `keyHash_`: `0x0000000000000000000000000000000000000000000000000000000000000001` (en el mock da igual)
+  - `subscriptionId_`: **SUB_ID**
+  - `nativePayment_`: `false`
+- **Deploy** → aparece `TRUSTRONDAFACTORY AT 0x…` (es `FACTORY`).
+- En el **mock de VRF**: `addConsumer(SUB_ID, FACTORY)`. Sin esto, la factory no puede pedir sorteos.
 
 **Qué estás viendo:** con Ownable de OpenZeppelin v5 el owner se pasa explícito. La factory ya habilita tUSD en el constructor, y lo podés comprobar con el botón azul `isTokenAllowed(USDC)` → `true`.
 
@@ -99,6 +117,7 @@ En **TRUSTRONDAFACTORY**, desplegá `createRonda` y completá:
 **Qué estás viendo:** la ronda no la desplegaste vos, la desplegó la factory con `new`. Esa es la **interacción entre contratos** del checklist. Probá los botones azules:
 - `status` → `0` (Open)
 - `organizer` → cuenta A (no la factory: la factory le pasa `msg.sender`)
+- `factory` → FACTORY
 - `contributionAmount` → `50000000`, `maxMembers` → `2`, `joinDeadline` → un timestamp
 
 ## Paso 7: Inscribirse (approve + join)
@@ -112,35 +131,45 @@ Un contrato no puede sacarte tokens sin permiso. Por eso siempre van **dos pasos
 
 **Cuenta B:** lo mismo (`approve` 50000000 → `join`).
 
-**Comprobar que arrancó la ronda:**
-- `status` → `1` (Active). El último en inscribirse la arrancó solo.
-- `roundDeadline` → timestamp de ahora + 300.
-- `currentBeneficiary` → cuenta A (cobra en el turno 0).
-- En la consola, abrí el detalle de la tx de `join` de B: en *logs* vas a ver los eventos `MemberJoined`, `RondaStarted` y `NewRound`.
+**Comprobar que se pidió el sorteo:**
+- `status` → `1` (**Drawing**). El último en inscribirse completó el cupo y la ronda le pidió el sorteo a la factory, que se lo pidió a Chainlink VRF.
+- En la factory: `drawRequestOf(RONDA)` → un número (es `REQUEST_ID`, en el mock suele ser `1`).
+- En la consola, el detalle de la tx de `join` de B muestra los eventos `MemberJoined`, `RondaFull`, el `RandomWordsRequested` del coordinador y el `DrawRequested` de la factory: **cuatro contratos en una sola transacción**.
 
-**Experimento:** con B, tocá `join` de nuevo → revierte con `InvalidStatus(0, 1)`: esperaba Open (0) y la ronda está Active (1).
+**Experimento:** con A, tocá `contribute` ahora → revierte con `InvalidStatus(2, 1)`: esperaba Active (2) y la ronda está Drawing (1).
 
-## Paso 8: Turno 0 (cobra A)
+## Paso 7b: Hacer de oráculo (el sorteo)
+
+En la vida real, unos bloques después el oráculo de Chainlink responde solo. Acá lo hacés vos:
+1. En el **mock de VRF**: `fulfillRandomWords(REQUEST_ID, FACTORY)` → transact (con cualquier cuenta).
+2. Comprobar en la ronda:
+   - `status` → `2` (Active); `roundDeadline` → ahora + 300.
+   - `getMembers` → el **orden sorteado**. Puede haber quedado A, B o B, A. Llamá **P1** al primero y **P2** al segundo.
+   - `currentBeneficiary` → P1.
+   - En los logs: `DrawFulfilled` (factory), `PayoutOrderDrawn` con el número aleatorio y el orden, `RondaStarted` y `NewRound`.
+3. **Experimento:** con cualquier cuenta, en la factory, `rawFulfillRandomWords(REQUEST_ID, [123])` → revierte con `OnlyCoordinatorCanFulfill`. **Nadie puede "elegir" el número:** solo el coordinador puede entregarlo.
+
+## Paso 8: Turno 0 (cobra P1)
 
 1. **Cuenta A:** MOCKUSDC `approve(RONDA, 50000000)` → TRUSTRONDA **contribute**.
 2. **Cuenta B:** lo mismo.
 3. Comprobar: `paidCount` → `2`; `hasPaid(0, cuenta A)` → `true`.
-4. **Cualquier cuenta:** **closeRound**. Lo puede llamar cualquiera, no hace falta que sea A.
+4. **Cualquier cuenta:** **closeRound**. Lo puede llamar cualquiera.
 5. Comprobar:
-   - `withdrawable(cuenta A)` → `payout: 100000000, collateral: 0`. Tiene 100 tUSD acreditados (pull payment) y la garantía todavía no se libera.
-   - `currentRound` → `1`, `currentBeneficiary` → cuenta B.
-6. **Cuenta A:** **withdraw** → `balanceOf(cuenta A)` sube 100 tUSD.
-7. **Experimento:** A toca **withdraw** de nuevo → revierte con `NothingToWithdraw`. Es CEI: el saldo se puso en cero antes de transferir.
+   - `withdrawable(P1)` → `payout: 100000000, collateral: 0`. Tiene 100 tUSD acreditados (pull payment) y la garantía todavía no se libera.
+   - `currentRound` → `1`, `currentBeneficiary` → P2.
+6. **P1:** **withdraw** → su `balanceOf` sube 100 tUSD.
+7. **Experimento:** P1 toca **withdraw** de nuevo → revierte con `NothingToWithdraw`. Es CEI: el saldo se puso en cero antes de transferir.
 
 **Qué estás viendo:** `closeRound` **no transfiere**, solo acredita. El dinero sale recién cuando cada uno llama a `withdraw`. Ese es el patrón *pull payment*.
 
-## Paso 9: Turno 1 (cobra B)
+## Paso 9: Turno 1 (cobra P2)
 
 1. A y B: `approve(RONDA, 50000000)` + **contribute**.
 2. **closeRound**.
-3. Comprobar: `status` → `2` (Completed); `currentRound` → `2`.
-4. `withdrawable(cuenta A)` → `payout: 0, collateral: 50000000`: recupera su garantía.
-   `withdrawable(cuenta B)` → `payout: 100000000, collateral: 50000000`.
+3. Comprobar: `status` → `3` (Completed); `currentRound` → `2`.
+4. `withdrawable(P1)` → `payout: 0, collateral: 50000000`: recupera su garantía.
+   `withdrawable(P2)` → `payout: 100000000, collateral: 50000000`.
 5. A y B: **withdraw**.
 
 ## Paso 10: Verificar que nadie ganó ni perdió
@@ -157,20 +186,20 @@ Un contrato no puede sacarte tokens sin permiso. Por eso siempre van **dos pasos
 
 ### A. Qué pasa si alguien no paga (ejecución de garantía)
 1. Crear otra ronda igual (Paso 6) y cargarla con *At Address* (`getRondas(1, 1)` te da la segunda).
-2. A y B se inscriben (Paso 7).
-3. Turno 0: **solo A** paga.
+2. A y B se inscriben (Paso 7) y hacés de oráculo con el nuevo `drawRequestOf` (Paso 7b).
+3. Turno 0: **solo P1** (el que cobra este turno) paga; P2 no.
 4. Tocar **closeRound** enseguida → revierte con `RoundStillOpen(deadline)`. Falta un pago y el turno no venció.
 5. **Esperar 5 minutos reales.** En Remix VM no se puede adelantar el reloj como con `vm.warp`, pero el turno dura 300 segundos.
-6. **closeRound** otra vez → ahora sí. En los logs aparece `CollateralSlashed(B, 0, 50000000)`.
-7. `withdrawable(cuenta A)` → `payout: 100000000`. **A cobró el pozo completo aunque B no pagó.**
-8. `getMemberInfo(cuenta B)` → `collateral: 0, defaults: 1`.
+6. **closeRound** otra vez → ahora sí. En los logs aparece `CollateralSlashed(P2, 0, 50000000)`.
+7. `withdrawable(P1)` → `payout: 100000000`. **P1 cobró el pozo completo aunque P2 no pagó.**
+8. `getMemberInfo(P2)` → `collateral: 0, defaults: 1`.
 
 Es el corazón de la propuesta de valor, y lo prueba `test_CloseRound_Default_SlashesCollateral`.
 
 ### B. Cancelar una ronda que no se llena
 1. Crear una ronda con `maxMembers = 3`. Solo A se inscribe.
 2. Con **B**, tocar **cancel** → revierte con `NotAuthorizedToCancel`: solo el organizador puede, mientras la inscripción esté vigente.
-3. Con **A** (organizadora): **cancel** → `status` = `3` (Cancelled).
+3. Con **A** (organizadora): **cancel** → `status` = `4` (Cancelled).
 4. A: **withdraw** → recupera su garantía.
 
 ### C. Permisos del owner de la factory
@@ -178,7 +207,7 @@ Es el corazón de la propuesta de valor, y lo prueba `test_CloseRound_Default_Sl
 - Con **A**: funciona. Pero las rondas ya creadas siguen funcionando igual: el owner no tiene poder sobre ellas.
 
 ### D. Ver el gas y el debugger
-- En la consola, cada transacción muestra *gas* y *transaction cost*. Compará `join` (~117 k) con `contribute` (~73 k): `join` escribe más storage (array, struct y estado).
+- En la consola, cada transacción muestra *gas* y *transaction cost*. Compará `join` (~129 k) con `contribute` (~73 k): `join` escribe más storage (array, struct y estado). El último `join` cuesta más (~286 k) porque además pide el sorteo a VRF.
 - Botón **Debug** de cualquier tx: recorre opcode por opcode y muestra cómo cambian el storage y las variables. Sirve para ver el orden **checks → effects → interactions**: la llamada a `transferFrom` aparece al final.
 
 ---
@@ -188,7 +217,8 @@ Es el corazón de la propuesta de valor, y lo prueba `test_CloseRound_Default_Sl
 | Lo que hiciste a mano en Remix | Dónde está automatizado en el repo |
 |---|---|
 | Pasos 4 a 10 completos | `test/TrustRonda.t.sol` → `test_FullCycle_AllPay_EveryoneEndsEven` |
-| Cada revert que provocaste | Los 29 tests `test_RevertWhen_*` |
+| Hacer de oráculo con el mock de VRF (Paso 7b) | `_fulfill` / `_fulfillWith` en `test/utils/BaseTest.sol`; en Sepolia lo hace Chainlink solo |
+| Cada revert que provocaste | Los 34 tests `test_RevertWhen_*` |
 | Esperar 5 minutos para el impago | `vm.warp(deadline + 1)` en los tests (instantáneo) |
 | Probar con 2 miembros y 50 tUSD | El fuzzing prueba 512 combinaciones de 2 a 12 miembros y montos al azar |
 | Desplegar con botones | `script/Deploy.s.sol` (`make deploy`) |

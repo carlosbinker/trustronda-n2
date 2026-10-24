@@ -1,6 +1,6 @@
 # Checklist de entrega: estado
 
-Estado al cerrar el código (23/10/2026). ✅ hecho y verificado · ⏳ depende del deploy, la grabación o la publicación (lo hace Carlos) · ➖ no aplica.
+Estado al 24/10/2026, con Chainlink VRF integrado. ✅ hecho y verificado · ⏳ depende del deploy, la grabación o la publicación (lo hace Carlos) · ➖ no aplica.
 
 ## A. Funcionalidad y smart contracts
 | Ítem | Estado | Evidencia |
@@ -8,7 +8,7 @@ Estado al cerrar el código (23/10/2026). ✅ hecho y verificado · ⏳ depende 
 | Pertinente para Web3 | ✅ | README §1, whitepaper §1–2 |
 | Flujo principal de punta a punta | ✅ | `test_FullCycle_AllPay_EveryoneEndsEven`, `Demo.s.sol`, e2e del frontend en anvil |
 | Hardhat o Foundry | ✅ | Foundry (`foundry.toml`) |
-| Al menos una interacción entre contratos | ✅ | Factory → `new TrustRonda`; TrustRonda → ERC20 con SafeERC20 |
+| Al menos una interacción entre contratos | ✅ | Factory → `new TrustRonda`; TrustRonda → Factory → **Chainlink VRF Coordinator** (externo) → Factory → TrustRonda; TrustRonda → ERC20 con SafeERC20 |
 | Todos los contratos propios desplegados | ⏳ | `make deploy` + `make demo` |
 | Verificados, con URL en el README | ⏳ | `--verify` + `make verify-ronda`; completar README §9 |
 | Desplegado = código del repo | ⏳ | Desplegar desde el commit final, sin cambios locales |
@@ -18,13 +18,13 @@ Estado al cerrar el código (23/10/2026). ✅ hecho y verificado · ⏳ depende 
 | Ítem | Estado | Evidencia |
 |---|---|---|
 | NatSpec completo | ✅ | Variables, structs, eventos y sus parámetros, errores y sus parámetros, modifiers, funciones con `@param`/`@return`, roles en `@dev` |
-| Custom errors | ✅ | 14 + 2 + 1, con parámetros |
+| Custom errors | ✅ | 16 + 5 + 1, con parámetros |
 | Sin strings ni bytes largos | ✅ | — |
 | Sin lecturas o escrituras repetidas de storage | ✅ | Variables locales cacheadas; slots empaquetados |
 | storage / memory / calldata | ✅ | `MemberInfo storage`; `memory` en las views |
 | constant / immutable | ✅ | 4 constants + 7 immutables en TrustRonda |
 | Visibilidad y mutabilidad | ✅ | external / internal view / pure |
-| Eventos en operaciones relevantes | ✅ | 9 + 2 + 1 eventos |
+| Eventos en operaciones relevantes | ✅ | 11 + 4 + 1 eventos |
 | CEI | ✅ | join, contribute, withdraw; closeRound sin llamadas externas |
 | Control de acceso y roles en NatSpec | ✅ | `@dev Roles y privilegios` en los dos contratos |
 | SafeERC20 | ✅ | Todas las transferencias |
@@ -37,17 +37,17 @@ Estado al cerrar el código (23/10/2026). ✅ hecho y verificado · ⏳ depende 
 ## C. Testing
 | Ítem | Estado | Evidencia |
 |---|---|---|
-| 100 % de los tests pasa | ✅ | 58/58, `docs/reports/forge-test.txt` |
+| 100 % de los tests pasa | ✅ | 70/70, `docs/reports/forge-test.txt` |
 | Test del flujo exitoso | ✅ | `test_FullCycle_*`, fuzz |
-| Test de revert | ✅ | 29 tests `test_RevertWhen_*` |
+| Test de revert | ✅ | 34 tests `test_RevertWhen_*` |
 | Coverage > 40 % en todas las métricas | ✅ | 100 / 100 / 100 / 100, `docs/reports/coverage.txt` |
 
 ## D. Slither
 | Ítem | Estado | Evidencia |
 |---|---|---|
 | Ejecutado sobre el contrato principal | ✅ | Sobre los 3 contratos |
-| Findings necesarios corregidos | ✅ | `uninitialized-local` |
-| Findings restantes clasificados | ✅ | 5 × `timestamp` aceptados |
+| Findings necesarios corregidos | ✅ | `uninitialized-local`, `unused-return` |
+| Findings restantes clasificados | ✅ | 7 Low aceptados, anotados en `docs/reports/slither-checklist.md` |
 | Justificación de los aceptados | ✅ | `docs/slither.md` |
 | Ningún problema relevante sin corregir | ✅ | Sin High ni Medium |
 
@@ -58,7 +58,7 @@ Estado al cerrar el código (23/10/2026). ✅ hecho y verificado · ⏳ depende 
 | Interactúa con los contratos y muestra el flujo | ✅ | e2e con Playwright en anvil: flujo completo |
 | Evidencia real on-chain en la demo | ⏳ | Historial con links a Etherscan; grabar en Sepolia |
 | Complejidad acorde | ✅ | Factory + máquina de estados + garantías + fuzz/invariant |
-| Claro y funcional antes que complejo | ✅ | VRF y Automation quedan en el roadmap |
+| Claro y funcional antes que complejo | ✅ | VRF implementado (lo pidió el profesor); Automation queda en el roadmap |
 
 ## F. Repositorio y documentación
 | Ítem | Estado | Evidencia |
@@ -75,6 +75,18 @@ Estado al cerrar el código (23/10/2026). ✅ hecho y verificado · ⏳ depende 
 |---|---|---|
 | ≤ 5 minutos | ⏳ | Guion de 5:00 en `docs/guion-video.md` |
 | Muestra el funcionamiento real | ⏳ | Segmento 2:00–3:40 en vivo en Sepolia |
+
+## Indicaciones del profesor (clases 19 y 20)
+| Ítem | Estado | Evidencia |
+|---|---|---|
+| Chainlink VRF para el sorteo (mentoría 0:33:44) | ✅ | `TrustRondaFactory.requestDraw` / `rawFulfillRandomWords`, `TrustRonda.fulfillDraw` |
+| Whitepaper con viabilidad comercial (mentoría 0:14:06) | ✅ | `docs/whitepaper.md` §5 |
+| Slither con `--checklist` y findings anotados (mentoría 0:58:56) | ✅ | `docs/reports/slither-checklist.md` |
+| Un solo repo con contratos y frontend | ✅ | `/contracts` + `/frontend` |
+| Video y whitepaper en el Drive, con apellido y nombre del proyecto | ⏳ | `Binker_TrustRonda_*` |
+| Sin Remix como herramienta de desarrollo (clase 19) | ✅ | Foundry |
+| Entrega individual: requiere excepción de Talento Tech (clase 18) | ⏳ | Pedirla por escrito |
+| Fecha 27/10 (confirmada en la clase 18) | ✅ | — |
 
 ## H. Opcional
 | Ítem | Estado | Evidencia |
