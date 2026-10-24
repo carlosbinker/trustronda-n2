@@ -35,7 +35,9 @@ contract TrustRondaFuzzTest is BaseTest {
             deal(address(usdc), users[i], perUser);
             _join(ronda, users[i]);
         }
+        _fulfillWith(ronda, payMask); // el número de VRF también es aleatorio
         assertEq(uint8(ronda.status()), uint8(RondaStatus.Active));
+        users = ronda.getMembers(); // orden de cobro sorteado
 
         for (uint256 r; r < members; ++r) {
             for (uint256 i; i < members; ++i) {
@@ -77,6 +79,7 @@ contract TrustRondaFuzzTest is BaseTest {
             deal(address(usdc), users[i], perUser);
             _join(ronda, users[i]);
         }
+        _fulfill(ronda);
         for (uint256 r; r < members; ++r) {
             for (uint256 i; i < members; ++i) {
                 _contribute(ronda, users[i]);
@@ -99,5 +102,36 @@ contract TrustRondaFuzzTest is BaseTest {
         vm.warp(block.timestamp + elapsed);
         vm.expectRevert();
         ronda.closeRound();
+    }
+
+    /// @notice Propiedad: para CUALQUIER número de VRF y cualquier cupo, el sorteo es una permutación de los
+    ///         inscriptos (nadie desaparece ni se duplica) y cada `position` coincide con su lugar.
+    /// @param word Número aleatorio entregado por VRF.
+    /// @param members Cupo (2..12).
+    function testFuzz_DrawIsPermutation(uint256 word, uint8 members) public {
+        members = uint8(bound(members, 2, 12));
+        vm.prank(organizer);
+        TrustRonda ronda =
+            TrustRonda(factory.createRonda(address(usdc), 1e6, 1e6, members, ROUND, JOIN_WINDOW));
+        address[] memory joined = new address[](members);
+        for (uint256 i; i < members; ++i) {
+            joined[i] = makeAddr(string.concat("p", vm.toString(i)));
+            deal(address(usdc), joined[i], 1e6);
+            _join(ronda, joined[i]);
+        }
+        _fulfillWith(ronda, word);
+        // si el callback se quedara sin gas (CALLBACK_GAS_LIMIT), el mock no revierte: la ronda seguiría en Drawing
+        assertEq(uint8(ronda.status()), uint8(RondaStatus.Active), "el callback de VRF entra en el gas limit");
+
+        address[] memory order = ronda.getMembers();
+        assertEq(order.length, members);
+        for (uint256 i; i < members; ++i) {
+            assertEq(ronda.getMemberInfo(order[i]).position, i);
+            uint256 seen;
+            for (uint256 k; k < members; ++k) {
+                if (order[k] == joined[i]) ++seen;
+            }
+            assertEq(seen, 1, "cada inscripto aparece exactamente una vez");
+        }
     }
 }

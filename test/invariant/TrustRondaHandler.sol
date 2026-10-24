@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {MockUSDC} from "../../contracts/MockUSDC.sol";
 import {TrustRonda, RondaStatus} from "../../contracts/TrustRonda.sol";
+import {TrustRondaFactory} from "../../contracts/TrustRondaFactory.sol";
+import {VRFCoordinatorV2_5Mock} from "@chainlink/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
 
 /// @title TrustRondaHandler
 /// @notice Handler del invariant testing: expone acciones válidas (con inputs acotados) que el fuzzer
@@ -12,14 +14,33 @@ contract TrustRondaHandler is Test {
     TrustRonda public ronda;
     MockUSDC public usdc;
     address[] public actors;
+    TrustRondaFactory public factory;
+    VRFCoordinatorV2_5Mock public vrf;
 
     /// @notice Contadores de llamadas exitosas, para ver en el reporte que el fuzzer realmente recorrió el flujo.
     mapping(bytes32 action => uint256 calls) public calls;
 
-    constructor(TrustRonda ronda_, MockUSDC usdc_, address[] memory actors_) {
+    constructor(
+        TrustRonda ronda_,
+        MockUSDC usdc_,
+        address[] memory actors_,
+        TrustRondaFactory factory_,
+        VRFCoordinatorV2_5Mock vrf_
+    ) {
         ronda = ronda_;
         usdc = usdc_;
         actors = actors_;
+        factory = factory_;
+        vrf = vrf_;
+    }
+
+    /// @dev Simula la respuesta de Chainlink VRF con un número elegido por el fuzzer.
+    function fulfill(uint256 word) external {
+        if (ronda.status() != RondaStatus.Drawing) return;
+        uint256[] memory words = new uint256[](1);
+        words[0] = word;
+        vrf.fulfillRandomWordsWithOverride(factory.drawRequestOf(address(ronda)), address(factory), words);
+        calls["fulfill"]++;
     }
 
     function join(uint256 actorSeed) external {
@@ -74,7 +95,11 @@ contract TrustRondaHandler is Test {
     ///      cancelar en cualquier momento, la mayoría de las secuencias terminarían en Cancelled en las primeras
     ///      llamadas y el fuzzer casi nunca llegaría a los turnos.
     function cancel(uint256 actorSeed) external {
-        if (ronda.status() != RondaStatus.Open || block.timestamp <= ronda.joinDeadline()) return;
+        RondaStatus st = ronda.status();
+        bool openExpired = st == RondaStatus.Open && block.timestamp > ronda.joinDeadline();
+        bool drawExpired =
+            st == RondaStatus.Drawing && block.timestamp > ronda.drawRequestedAt() + ronda.DRAW_TIMEOUT();
+        if (!openExpired && !drawExpired) return;
         vm.prank(actors[bound(actorSeed, 0, actors.length - 1)]);
         ronda.cancel();
         calls["cancel"]++;

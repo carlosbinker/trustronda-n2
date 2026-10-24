@@ -19,7 +19,9 @@ import {
     RoundExpired,
     RoundStillOpen,
     NothingToWithdraw,
-    NotAuthorizedToCancel
+    NotAuthorizedToCancel,
+    NotFactory,
+    DrawStillPending
 } from "../contracts/TrustRonda.sol";
 
 /// @title TrustRondaTest
@@ -28,6 +30,7 @@ contract TrustRondaTest is BaseTest {
     // Eventos redeclarados para vm.expectEmit
     event MemberJoined(address indexed member, uint8 indexed position, uint256 collateral);
     event RondaStarted(uint64 firstDeadline);
+    event RondaFull(uint64 drawRequestedAt);
     event ContributionMade(address indexed member, uint8 indexed round, uint256 amount);
     event CollateralSlashed(address indexed member, uint8 indexed round, uint256 amount);
     event RoundClosed(uint8 indexed round, address indexed beneficiary, uint256 pot, uint8 defaults);
@@ -44,7 +47,7 @@ contract TrustRondaTest is BaseTest {
         TrustRonda ronda = _createActiveRonda();
         assertEq(uint8(ronda.status()), uint8(RondaStatus.Active));
 
-        address[3] memory order = [alice, bob, carol];
+        address[] memory order = ronda.getMembers(); // orden sorteado por VRF
         for (uint8 r; r < MEMBERS; ++r) {
             assertEq(ronda.currentBeneficiary(), order[r]);
             _contribute(ronda, alice);
@@ -92,7 +95,8 @@ contract TrustRondaTest is BaseTest {
         assertEq(uint8(ronda.status()), uint8(RondaStatus.Open));
     }
 
-    function test_Join_LastMemberStartsRonda() public {
+    /// @notice El último inscripto completa el cupo: la ronda pasa a Drawing y se pide el sorteo a Chainlink VRF.
+    function test_Join_LastMemberRequestsDraw() public {
         TrustRonda ronda = _createDefaultRonda();
         _join(ronda, alice);
         _join(ronda, bob);
@@ -100,15 +104,59 @@ contract TrustRondaTest is BaseTest {
         vm.startPrank(carol);
         usdc.approve(address(ronda), COLLATERAL);
         vm.expectEmit(false, false, false, true, address(ronda));
-        emit RondaStarted(uint64(block.timestamp) + ROUND);
+        emit RondaFull(uint64(block.timestamp));
         ronda.join();
         vm.stopPrank();
 
+        assertEq(uint8(ronda.status()), uint8(RondaStatus.Drawing));
+        assertEq(ronda.drawRequestedAt(), uint64(block.timestamp));
+        assertEq(ronda.roundDeadline(), 0); // el turno no arranca hasta que llega el sorteo
+        uint256 requestId = factory.drawRequestOf(address(ronda));
+        assertGt(requestId, 0);
+        assertEq(factory.drawRequests(requestId), address(ronda));
+    }
+
+    /// @notice Llega el número de VRF: se sortea el orden (permutación de los inscriptos) y arranca el turno 0.
+    function test_FulfillDraw_ShufflesAndStarts() public {
+        TrustRonda ronda = _createDefaultRonda();
+        _join(ronda, alice);
+        _join(ronda, bob);
+        _join(ronda, carol);
+
+        vm.expectEmit(false, false, false, true, address(ronda));
+        emit RondaStarted(uint64(block.timestamp) + ROUND);
+        _fulfill(ronda);
+
         assertEq(uint8(ronda.status()), uint8(RondaStatus.Active));
         assertEq(ronda.roundDeadline(), uint64(block.timestamp) + ROUND);
-        address[] memory members = ronda.getMembers();
-        assertEq(members.length, 3);
-        assertEq(members[2], carol);
+        address[] memory m = ronda.getMembers();
+        assertEq(m.length, 3);
+        // es una permutación: cada uno aparece una vez y su `position` coincide con su índice
+        for (uint256 i; i < 3; ++i) {
+            assertEq(ronda.getMemberInfo(m[i]).position, i);
+        }
+        assertTrue(m[0] != m[1] && m[1] != m[2] && m[0] != m[2]);
+        assertEq(ronda.currentBeneficiary(), m[0]);
+        assertEq(factory.drawRequests(factory.drawRequestOf(address(ronda))), address(0)); // pedido consumido
+    }
+
+    function test_RevertWhen_FulfillDrawNotFactory() public {
+        TrustRonda ronda = _createDefaultRonda();
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(NotFactory.selector, outsider));
+        ronda.fulfillDraw(123);
+    }
+
+    /// @notice Un sorteo que llega tarde (ronda ya cancelada por timeout) se ignora sin revertir.
+    function test_FulfillDraw_IgnoredWhenNotDrawing() public {
+        TrustRonda ronda = _createDefaultRonda();
+        _join(ronda, alice);
+        _join(ronda, bob);
+        _join(ronda, carol);
+        vm.warp(block.timestamp + ronda.DRAW_TIMEOUT() + 1);
+        ronda.cancel();
+        _fulfill(ronda); // no revierte
+        assertEq(uint8(ronda.status()), uint8(RondaStatus.Cancelled));
     }
 
     function test_RevertWhen_JoinTwice() public {
@@ -163,6 +211,16 @@ contract TrustRondaTest is BaseTest {
         assertTrue(ronda.hasPaid(0, bob));
         assertFalse(ronda.hasPaid(0, alice));
         assertEq(ronda.paidCount(), 1);
+    }
+
+    function test_RevertWhen_ContributeWhileDrawing() public {
+        TrustRonda ronda = _createDefaultRonda();
+        _join(ronda, alice);
+        _join(ronda, bob);
+        _join(ronda, carol);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(InvalidStatus.selector, RondaStatus.Active, RondaStatus.Drawing));
+        ronda.contribute();
     }
 
     function test_RevertWhen_ContributeBeforeStart() public {
@@ -225,67 +283,70 @@ contract TrustRondaTest is BaseTest {
         _contribute(ronda, bob);
         _contribute(ronda, carol);
 
+        address[] memory m = ronda.getMembers();
         vm.expectEmit(true, true, false, true, address(ronda));
-        emit RoundClosed(0, alice, CONTRIBUTION * 3, 0);
+        emit RoundClosed(0, m[0], CONTRIBUTION * 3, 0);
         vm.prank(outsider); // un tercero puede cerrar (rol de keeper)
         ronda.closeRound();
 
-        (uint256 payout, uint256 collateral) = ronda.withdrawable(alice);
+        (uint256 payout, uint256 collateral) = ronda.withdrawable(m[0]);
         assertEq(payout, CONTRIBUTION * 3);
         assertEq(collateral, 0); // la garantía recién se libera al final
         assertEq(ronda.currentRound(), 1);
         assertEq(ronda.paidCount(), 0);
-        assertEq(ronda.currentBeneficiary(), bob);
+        assertEq(ronda.currentBeneficiary(), m[1]);
         assertEq(ronda.roundDeadline(), uint64(block.timestamp) + ROUND);
     }
 
     /// @notice Si alguien no paga, al vencer el turno se ejecuta su garantía y el beneficiario cobra el pozo completo.
     function test_CloseRound_Default_SlashesCollateral() public {
         TrustRonda ronda = _createActiveRonda();
-        _contribute(ronda, alice);
-        _contribute(ronda, bob);
-        // carol no paga
+        address[] memory m = ronda.getMembers();
+        _contribute(ronda, m[0]);
+        _contribute(ronda, m[1]);
+        // m[2] no paga
         vm.warp(ronda.roundDeadline() + 1);
 
         vm.expectEmit(true, true, false, true, address(ronda));
-        emit CollateralSlashed(carol, 0, CONTRIBUTION);
+        emit CollateralSlashed(m[2], 0, CONTRIBUTION);
         vm.expectEmit(true, true, false, true, address(ronda));
-        emit RoundClosed(0, alice, CONTRIBUTION * 3, 1);
+        emit RoundClosed(0, m[0], CONTRIBUTION * 3, 1);
         ronda.closeRound();
 
-        TrustRonda.MemberInfo memory info = ronda.getMemberInfo(carol);
+        TrustRonda.MemberInfo memory info = ronda.getMemberInfo(m[2]);
         assertEq(info.collateral, COLLATERAL - CONTRIBUTION);
         assertEq(info.defaults, 1);
-        (uint256 payout,) = ronda.withdrawable(alice);
+        (uint256 payout,) = ronda.withdrawable(m[0]);
         assertEq(payout, CONTRIBUTION * 3);
     }
 
     /// @notice Con la garantía agotada, el pozo sale más chico: se acredita solo lo que efectivamente entró.
     function test_CloseRound_DefaultWithoutCollateral_SmallerPot() public {
         TrustRonda ronda = _createActiveRonda();
-        // Turno 0: carol no paga, pierde su garantía completa (100)
-        _contribute(ronda, alice);
-        _contribute(ronda, bob);
+        address[] memory m = ronda.getMembers();
+        // Turno 0: m[2] no paga, pierde su garantía completa (100)
+        _contribute(ronda, m[0]);
+        _contribute(ronda, m[1]);
         vm.warp(ronda.roundDeadline() + 1);
         ronda.closeRound();
 
-        // Turno 1: carol vuelve a no pagar y ya no tiene garantía
-        _contribute(ronda, alice);
-        _contribute(ronda, bob);
+        // Turno 1: m[2] vuelve a no pagar y ya no tiene garantía
+        _contribute(ronda, m[0]);
+        _contribute(ronda, m[1]);
         vm.warp(ronda.roundDeadline() + 1);
         vm.expectEmit(true, true, false, true, address(ronda));
-        emit RoundClosed(1, bob, CONTRIBUTION * 2, 1);
+        emit RoundClosed(1, m[1], CONTRIBUTION * 2, 1);
         ronda.closeRound();
 
-        assertEq(ronda.getMemberInfo(carol).defaults, 2);
-        assertEq(ronda.getMemberInfo(carol).collateral, 0);
+        assertEq(ronda.getMemberInfo(m[2]).defaults, 2);
+        assertEq(ronda.getMemberInfo(m[2]).collateral, 0);
     }
 
     function test_CloseRound_NobodyPays_AllCollateralSlashed() public {
         TrustRonda ronda = _createActiveRonda();
         vm.warp(ronda.roundDeadline() + 1);
         ronda.closeRound();
-        (uint256 payout,) = ronda.withdrawable(alice);
+        (uint256 payout,) = ronda.withdrawable(ronda.getMembers()[0]);
         assertEq(payout, COLLATERAL * 3);
     }
 
@@ -349,6 +410,27 @@ contract TrustRondaTest is BaseTest {
         ronda.cancel();
     }
 
+    /// @notice Si Chainlink VRF no responde en DRAW_TIMEOUT, cualquiera cancela y todos recuperan la garantía.
+    function test_Cancel_DrawTimeout_RefundsCollateral() public {
+        TrustRonda ronda = _createDefaultRonda();
+        _join(ronda, alice);
+        _join(ronda, bob);
+        _join(ronda, carol);
+        uint64 availableAt = ronda.drawRequestedAt() + ronda.DRAW_TIMEOUT();
+
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(DrawStillPending.selector, availableAt));
+        ronda.cancel();
+
+        vm.warp(availableAt + 1);
+        vm.prank(outsider);
+        ronda.cancel();
+        assertEq(uint8(ronda.status()), uint8(RondaStatus.Cancelled));
+        vm.prank(carol);
+        ronda.withdraw();
+        assertEq(usdc.balanceOf(carol), 1_000e6);
+    }
+
     function test_RevertWhen_CancelActiveRonda() public {
         TrustRonda ronda = _createActiveRonda();
         vm.prank(organizer);
@@ -366,17 +448,18 @@ contract TrustRondaTest is BaseTest {
         _contribute(ronda, bob);
         _contribute(ronda, carol);
         ronda.closeRound();
+        address first = ronda.getMembers()[0];
 
-        uint256 before = usdc.balanceOf(alice);
+        uint256 before = usdc.balanceOf(first);
         vm.expectEmit(true, false, false, true, address(ronda));
-        emit Withdrawn(alice, CONTRIBUTION * 3, 0);
-        vm.prank(alice);
+        emit Withdrawn(first, CONTRIBUTION * 3, 0);
+        vm.prank(first);
         ronda.withdraw();
-        assertEq(usdc.balanceOf(alice), before + CONTRIBUTION * 3);
+        assertEq(usdc.balanceOf(first), before + CONTRIBUTION * 3);
 
         // el segundo retiro revierte: el saldo se puso en cero antes de transferir (CEI)
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(NothingToWithdraw.selector, alice));
+        vm.prank(first);
+        vm.expectRevert(abi.encodeWithSelector(NothingToWithdraw.selector, first));
         ronda.withdraw();
     }
 
@@ -395,6 +478,7 @@ contract TrustRondaTest is BaseTest {
         TrustRonda ronda = _createDefaultRonda();
         assertEq(address(ronda.token()), address(usdc));
         assertEq(ronda.organizer(), organizer);
+        assertEq(address(ronda.factory()), address(factory));
         assertEq(ronda.contributionAmount(), CONTRIBUTION);
         assertEq(ronda.collateralAmount(), COLLATERAL);
         assertEq(ronda.maxMembers(), MEMBERS);

@@ -25,7 +25,7 @@ contract TrustRondaInvariantTest is BaseTest {
         for (uint256 i; i < actors.length; ++i) {
             deal(address(usdc), actors[i], 10_000e6);
         }
-        handler = new TrustRondaHandler(ronda, usdc, actors);
+        handler = new TrustRondaHandler(ronda, usdc, actors, factory, vrf);
         targetContract(address(handler));
     }
 
@@ -69,6 +69,6 @@ contract TrustRondaInvariantTest is BaseTest {
     function afterInvariant() external view {
         console.log("join", handler.calls("join"), "contribute", handler.calls("contribute"));
         console.log("closeRound", handler.calls("closeRound"), "withdraw", handler.calls("withdraw"));
-        console.log("cancel", handler.calls("cancel"));
+        console.log("cancel", handler.calls("cancel"), "fulfill", handler.calls("fulfill"));
     }
 }

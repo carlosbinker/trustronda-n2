@@ -4,7 +4,14 @@ pragma solidity ^0.8.24;
 import {BaseTest} from "./utils/BaseTest.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {TrustRonda, InvalidMemberCount} from "../contracts/TrustRonda.sol";
-import {TrustRondaFactory, TokenNotAllowed, ZeroTokenAddress} from "../contracts/TrustRondaFactory.sol";
+import {
+    TrustRondaFactory,
+    TokenNotAllowed,
+    ZeroTokenAddress,
+    ZeroCoordinatorAddress,
+    NotRonda,
+    OnlyCoordinatorCanFulfill
+} from "../contracts/TrustRondaFactory.sol";
 
 /// @title TrustRondaFactoryTest
 /// @notice Tests de la factory: creación de rondas (interacción entre contratos), registro y lista blanca.
@@ -17,8 +24,64 @@ contract TrustRondaFactoryTest is BaseTest {
     }
 
     function test_Constructor_WithoutInitialToken() public {
-        TrustRondaFactory f = new TrustRondaFactory(owner, address(0));
+        TrustRondaFactory f = new TrustRondaFactory(owner, address(0), address(vrf), KEY_HASH, subId, true);
         assertFalse(f.isTokenAllowed(address(0)));
+        assertTrue(f.nativePayment());
+    }
+
+    function test_Constructor_SetsVrfConfig() public view {
+        assertEq(address(factory.vrfCoordinator()), address(vrf));
+        assertEq(factory.keyHash(), KEY_HASH);
+        assertEq(factory.subscriptionId(), subId);
+        assertFalse(factory.nativePayment());
+    }
+
+    function test_RevertWhen_ConstructorZeroCoordinator() public {
+        vm.expectRevert(ZeroCoordinatorAddress.selector);
+        new TrustRondaFactory(owner, address(usdc), address(0), KEY_HASH, subId, false);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Chainlink VRF: pedido y callback
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// @notice Solo una ronda de esta factory puede gastar la suscripción de VRF.
+    function test_RevertWhen_RequestDrawNotRonda() public {
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(NotRonda.selector, outsider));
+        factory.requestDraw();
+    }
+
+    /// @notice Solo el coordinador puede entregar números: nadie puede "elegir" el resultado del sorteo.
+    function test_RevertWhen_FulfillNotCoordinator() public {
+        uint256[] memory words = new uint256[](1);
+        vm.prank(outsider);
+        vm.expectRevert(abi.encodeWithSelector(OnlyCoordinatorCanFulfill.selector, outsider, address(vrf)));
+        factory.rawFulfillRandomWords(1, words);
+    }
+
+    /// @notice Un requestId desconocido se ignora sin revertir.
+    function test_Fulfill_UnknownRequestIgnored() public {
+        uint256[] memory words = new uint256[](1);
+        vm.prank(address(vrf));
+        factory.rawFulfillRandomWords(999, words); // no revierte
+    }
+
+    function test_DrawRequested_AndFulfilled_Events() public {
+        TrustRonda ronda = _createDefaultRonda();
+        _join(ronda, alice);
+        _join(ronda, bob);
+        vm.startPrank(carol);
+        usdc.approve(address(ronda), COLLATERAL);
+        vm.expectEmit(true, false, false, false, address(factory));
+        emit TrustRondaFactory.DrawRequested(address(ronda), 0);
+        ronda.join();
+        vm.stopPrank();
+
+        uint256 requestId = factory.drawRequestOf(address(ronda));
+        vm.expectEmit(true, true, false, false, address(factory));
+        emit TrustRondaFactory.DrawFulfilled(address(ronda), requestId, 0);
+        _fulfill(ronda);
     }
 
     function test_CreateRonda_DeploysAndRegisters() public {
