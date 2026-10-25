@@ -28,3 +28,6 @@ crytic-export/
 
 # Despliegues locales (anvil)
 deployments/31337.json
+
+# Locks internos de forge script
+broadcast/**/*.lock
