@@ -65,4 +65,4 @@ Slither avisa que se compara contra `block.timestamp`, porque el proposer del bl
 | Overflow / truncamiento | Solidity 0.8; `unchecked` solo en contadores acotados; casts justificados y validados. |
 | `tx.origin`, `delegatecall`, `selfdestruct`, assembly | No se usan. |
 
-Además del análisis estático: 70 tests (incluida la invariante de solvencia exacta y el fuzz de que el sorteo siempre es una permutación) y coverage del 100 %.
+Además del análisis estático: 67 tests (incluida la invariante de solvencia exacta y el fuzz de que el sorteo siempre es una permutación) y coverage del 100 %.

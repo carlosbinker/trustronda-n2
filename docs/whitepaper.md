@@ -9,7 +9,7 @@ Versión 2.0: refleja el MVP **implementado y desplegado** en Sepolia. La versi�
 
 ## Resumen
 
-TrustRonda lleva a Ethereum la ronda de ahorro rotativo (ROSCA): un grupo aporta un monto fijo en cada turno y en cada turno uno de los miembros se lleva el pozo. El contrato reemplaza al organizador como custodio, fija las reglas de forma inmutable, **sortea el orden de cobro con Chainlink VRF** (aleatoriedad verificable que nadie puede arreglar) y le pide a cada miembro una **garantía** que se ejecuta automáticamente si no paga, para que el beneficiario del turno cobre igual. El MVP consta de tres contratos (`TrustRondaFactory`, `TrustRonda` y `MockUSDC`) integrados con el coordinador de Chainlink VRF v2.5, tiene 70 tests con coverage del 100 % y análisis con Slither, y se opera desde un frontend en React.
+TrustRonda lleva a Ethereum la ronda de ahorro rotativo (ROSCA): un grupo aporta un monto fijo en cada turno y en cada turno uno de los miembros se lleva el pozo. El contrato reemplaza al organizador como custodio, fija las reglas de forma inmutable, **sortea el orden de cobro con Chainlink VRF** (aleatoriedad verificable que nadie puede arreglar) y le pide a cada miembro una **garantía** que se ejecuta automáticamente si no paga, para que el beneficiario del turno cobre igual. El MVP consta de tres contratos (`TrustRondaFactory`, `TrustRonda` y `MockUSDC`) integrados con el coordinador de Chainlink VRF v2.5, tiene 67 tests con coverage del 100 % y análisis con Slither, y se opera desde un frontend en React.
 
 ---
 
@@ -91,6 +91,23 @@ balance(tUSD, ronda) = Σ pozos acreditados sin retirar
 
 Cuando se cierra un turno, los aportes del turno pasan a "pozo acreditado" del beneficiario, junto con lo ejecutado de las garantías. El dinero cambia de categoría, pero el total no se crea ni se destruye.
 
+### 3.4 Despliegue en Sepolia
+Desplegado el 25/10/2026 y verificado en Etherscan y Sourcify (Exact Match):
+
+| Contrato | Dirección |
+|---|---|
+| `MockUSDC` (tUSD) | `0x0a464AC93aC01600E6e257c8005f84bC6B586bC3` |
+| `TrustRondaFactory` | `0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13` |
+| `TrustRonda` (ronda de la demo) | `0x58a04f8558CCF9840265C04358F8fE1281DC6271` |
+| Coordinador de Chainlink VRF v2.5 (externo) | `0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B` |
+
+La factory es el único consumidor de una suscripción de VRF que paga en LINK. La ronda de la demo, de 2 miembros con aporte y garantía de 50 tUSD, recorrió el ciclo completo on-chain: creación, inscripciones, pedido y respuesta del sorteo de VRF, dos turnos con aportes y cierres, y los retiros de pozos y garantías. Terminó en `Completed` con **saldo 0**, la ecuación de solvencia de la sección 3.3 cumplida en la red real. Las 21 transacciones están en la sección 10 del README.
+
+El deploy dejó dos datos que el diseño tiene que tener en cuenta:
+
+- **Glamsterdam** (EIP-8037, activo en Sepolia desde el 06/10/2026) multiplicó el costo de crear código y de escribir celdas nuevas de storage. `createRonda` cuesta 10,95 M de gas (desplegar la factory, 18,6 M) y el sorteo de 12 miembros, 372 k. Por eso `CALLBACK_GAS_LIMIT` pasó de 300 k a 500 k, y los tests corren también con esas reglas (`make test-amsterdam`).
+- **VRF reserva el costo máximo, no el real.** El coordinador solo responde si la suscripción cubre el callback al gas price tope del key hash (500 gwei): con 500 k de límite, eran 75,57 LINK. El primer pedido quedó pendiente con 10 LINK y se resolvió fondeando a 100. El cobro real fue una fracción, porque el gas estaba en ~0,05 gwei.
+
 ## 4. Seguridad y riesgos
 
 ### 4.1 Medidas implementadas
@@ -108,12 +125,12 @@ Cuando se cierra un turno, los aportes del turno pasan a "pozo acreditado" del b
 | Oráculo que no responde | `DRAW_TIMEOUT` = 1 día: después, cualquiera cancela y se devuelven las garantías. Un sorteo tardío se ignora sin revertir. |
 
 ### 4.2 Verificación
-- **70 tests** (unitarios, de integración con el mock oficial de VRF, fuzz con 512 corridas, incluido que el sorteo siempre es una permutación, e invariantes con 128 × 64 llamadas). Coverage del 100 % en líneas, statements, branches y funciones.
+- **67 tests** (unitarios, de integración con el mock oficial de VRF, fuzz con 512 corridas, incluido que el sorteo siempre es una permutación, e invariantes con 128 × 64 llamadas). Coverage del 100 % en líneas, statements, branches y funciones.
 - **Slither:** 2 findings Medium corregidos; 7 Low aceptados con justificación. Sin High.
 
 ### 4.3 Riesgos residuales (honestos)
 1. **Incentivo del que ya cobró.** Con garantía igual a un aporte, a quien cobra en el turno 1 de una ronda de N le conviene dejar de pagar si `N − 1 > 1`. Pierde la garantía, pero se ahorra los aportes restantes. El MVP **mitiga pero no elimina** el riesgo. El organizador puede pedir una garantía mayor (el contrato acepta cualquier valor ≥ aporte), y el roadmap propone garantías dinámicas.
-2. **Costo y dependencia del oráculo.** Cada sorteo consume saldo de la suscripción de VRF, que hoy financia el operador. Si la suscripción se queda sin fondos, el sorteo se demora; el timeout evita que las garantías queden trabadas, pero la ronda se cancela.
+2. **Costo y dependencia del oráculo.** Cada sorteo consume saldo de la suscripción de VRF, que hoy financia el operador, y además la suscripción tiene que **reservar el costo máximo del callback** (sección 3.4), que crece con `CALLBACK_GAS_LIMIT`. Si el saldo no alcanza, el sorteo se demora, como pasó en el deploy real; el timeout evita que las garantías queden trabadas, pero la ronda se cancela.
 3. **Liveness.** Si nadie llama a `closeRound`, la ronda no avanza. Cualquiera puede hacerlo, incluido el beneficiario, que es el más interesado. Chainlink Automation lo resuelve sin depender de nadie.
 4. **Dependencia del token.** Un stablecoin real con lista negra (USDC) podría congelar la dirección de una ronda. Es un riesgo aceptado de usar stablecoins centralizadas.
 
@@ -142,7 +159,8 @@ Cuando se cierra un turno, los aportes del turno pasan a "pozo acreditado" del b
 | Concepto | Observación |
 |---|---|
 | Gas de los usuarios | En Ethereum mainnet es alto para aportes chicos. **Por eso el despliegue productivo apunta a una L2** (Base o Arbitrum), donde cada transacción cuesta centavos. |
-| Chainlink VRF | Un sorteo por ronda (no por turno). Lo paga la suscripción y se recupera con la comisión. |
+| Chainlink VRF | Un sorteo por ronda (no por turno). Lo paga la suscripción y se recupera con la comisión. La suscripción necesita un capital inmovilizado para la reserva de costo máximo (75,57 LINK en Sepolia con 500 k de callback); en una L2 habría que relevar los topes de gas price de cada key hash, que definen esa reserva. |
+| Crear una ronda | Con Glamsterdam, desplegar el bytecode completo cuesta 10,95 M de gas. Los clones mínimos (EIP-1167) del roadmap lo bajan a una fracción. |
 | Auditoría y desarrollo | Costo fijo inicial; indispensable antes de manejar fondos reales. |
 
 ### 5.5 Competencia y diferenciación

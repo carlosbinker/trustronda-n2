@@ -11,7 +11,7 @@ Un solo repositorio contiene los contratos (Foundry) y el frontend (React):
 | Carpeta | Qué hay | Herramienta |
 |---|---|---|
 | `contracts/` | Los 3 contratos Solidity | `forge build` |
-| `test/` | 70 tests | `forge test`, `forge coverage` |
+| `test/` | 67 tests | `forge test`, `forge coverage` |
 | `script/` | Deploy, demo y verificación | `forge script`, `cast` |
 | `deployments/` | Direcciones por red (JSON) | lo escribe `Deploy.s.sol` |
 | `frontend/` | La dApp | `npm run dev` |

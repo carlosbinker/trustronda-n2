@@ -6,7 +6,7 @@ Proyecto final del *Ethereum Developer Pack, Nivel 2: Smart Contract Developer* 
 Autor: Carlos Binker.
 
 > Red: **Sepolia** · Contratos: **Solidity 0.8.24 + OpenZeppelin 5.1 + Chainlink VRF v2.5** · Framework: **Foundry** · Frontend: **React + Vite + wagmi/viem**
-> Tests: **70 pasan** · Coverage: **100 %** en líneas, statements, branches y funciones · Slither: **sin findings High ni Medium**
+> Tests: **67 pasan** · Coverage: **100 %** en líneas, statements, branches y funciones · Slither: **sin findings High ni Medium**
 
 ---
 
@@ -174,7 +174,7 @@ forge coverage --no-match-coverage "(script|test|lib)" # o: make coverage
 forge test --gas-report                            # consumo de gas por función
 ```
 
-**Resultado:** 70 tests, 0 fallas. Con Foundry 1.8 o posterior, el resumen dice "67 tests" porque agrupa las 4 invariantes en una sola entrada ([`docs/reports/forge-test.txt`](docs/reports/forge-test.txt)).
+**Resultado:** 67 tests, 0 fallas, con Foundry 1.8.6 ([`docs/reports/forge-test.txt`](docs/reports/forge-test.txt)). Pasan igual con `make test-amsterdam`, las reglas de gas de Glamsterdam.
 
 | Suite | Tests | Qué cubre |
 |---|---|---|
