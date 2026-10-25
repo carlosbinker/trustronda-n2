@@ -36,6 +36,8 @@ make deploy
 ```
 Al terminar debería mostrar `Pass - Verified` para MockUSDC y TrustRondaFactory. Las direcciones quedan en `deployments/11155111.json`.
 En vrf.chain.link, la factory tiene que aparecer como **consumer** de tu suscripción. Si `addConsumer` falla, casi siempre es porque la suscripción se creó con otra wallet distinta de `PRIVATE_KEY`.
+**Gas en Sepolia (Glamsterdam).** Desde el 06/10/2026 Sepolia tiene activo el fork Glamsterdam (EIP-8037): crear un contrato cuesta 1.530 gas por byte de código (antes 200) y una celda nueva de storage, 97.920 (antes 20.000). Si Foundry simula con las reglas viejas, estima de menos y las transacciones fallan con *"contract creation code storage out of gas"*. Por eso `make deploy`, `make demo-start` y `make demo-finish` corren con `--hardfork amsterdam --gas-estimate-multiplier 150` (variable `SEPOLIA_FLAGS` del Makefile). El gas que no se usa no se cobra. Con el mismo cambio se subió `CALLBACK_GAS_LIMIT` de 300 k a 500 k: medido con `make test-amsterdam`, el sorteo de 12 miembros usa 372 k.
+
 Si la verificación falla por un timeout, se reintenta solo:
 ```bash
 forge script script/Deploy.s.sol --rpc-url sepolia --resume --verify

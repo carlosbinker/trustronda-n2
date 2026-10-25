@@ -189,7 +189,7 @@ function createRonda(...) external returns (address ronda) {
 **El circuito (cuatro llamadas entre contratos):**
 ```
 1. último join()  →  TrustRonda pasa a Drawing  →  factory.requestDraw()
-2. factory  →  VRFCoordinator.requestRandomWords(keyHash, subId, 3 confirmaciones, 300k gas, 1 número)
+2. factory  →  VRFCoordinator.requestRandomWords(keyHash, subId, 3 confirmaciones, 500k gas, 1 número)
    … unos bloques después, el oráculo de Chainlink responde en OTRA transacción …
 3. VRFCoordinator  →  factory.rawFulfillRandomWords(requestId, [número])
 4. factory  →  ronda.fulfillDraw(número)  →  sorteo Fisher-Yates  →  Active, arranca el turno 1

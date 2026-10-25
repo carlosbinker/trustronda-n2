@@ -17,6 +17,8 @@ jobs:
         run: forge build
       - name: Test
         run: forge test -vv
+      - name: Test (reglas de gas de Glamsterdam, como Sepolia)
+        run: forge test -vv --hardfork amsterdam
       - name: Coverage
         run: forge coverage --no-match-coverage "(script|test)"
 

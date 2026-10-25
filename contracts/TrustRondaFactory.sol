@@ -48,8 +48,11 @@ contract TrustRondaFactory is Ownable, ITrustRondaDrawer {
     // Constantes de Chainlink VRF
     // ─────────────────────────────────────────────────────────────────────
 
-    /// @notice Gas máximo del callback de VRF. Alcanza para sortear 12 miembros con margen (medido en los tests: < 225 k).
-    uint32 public constant CALLBACK_GAS_LIMIT = 300_000;
+    /// @notice Gas máximo del callback de VRF. Alcanza para sortear 12 miembros con margen.
+    /// @dev Medido con `forge test --hardfork amsterdam` (Glamsterdam, activo en Sepolia desde el 06/10/2026, encarece
+    ///      las escrituras de storage): 111 k con 2 miembros y 372 k con 12. Antes del fork eran 190 k con 12, y el
+    ///      valor anterior (300 k) ya no alcanzaba a partir de 10 miembros.
+    uint32 public constant CALLBACK_GAS_LIMIT = 500_000;
 
     /// @notice Confirmaciones de bloque antes de responder (el mínimo de Sepolia es 3).
     uint16 public constant REQUEST_CONFIRMATIONS = 3;
