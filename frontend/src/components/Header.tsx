@@ -1,4 +1,4 @@
-import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useReconnect, useSwitchChain } from "wagmi";
 import { chain } from "../config";
 import { short } from "../lib/format";
 
@@ -7,6 +7,15 @@ export default function Header() {
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
+  const { reconnect } = useReconnect();
+  // Al cambiar de cuenta en MetaMask, la wallet puede seguir conectada aunque la dApp la vea desconectada.
+  // En ese caso wagmi rechaza el connect con ConnectorAlreadyConnectedError: se recupera la sesión existente.
+  const alreadyConnected = error?.name === "ConnectorAlreadyConnectedError";
+  const onConnect = () =>
+    connect(
+      { connector: connectors[0] },
+      { onError: (e) => { if (e.name === "ConnectorAlreadyConnectedError") reconnect(); } },
+    );
   const wrongChain = isConnected && chainId !== chain.id;
 
   return (
@@ -24,7 +33,7 @@ export default function Header() {
       <div className="wallet">
         <span className="net">{chain.name}</span>
         {!isConnected && (
-          <button className="btn" disabled={isPending} onClick={() => connect({ connector: connectors[0] })}>
+          <button className="btn" disabled={isPending} onClick={onConnect}>
             {isPending ? "Conectando…" : "Conectar wallet"}
           </button>
         )}
@@ -34,11 +43,12 @@ export default function Header() {
           </button>
         )}
         {isConnected && !wrongChain && (
-          <button className="btn ghost" title="Desconectar" onClick={() => disconnect()}>
-            {short(address)}
-          </button>
+          <>
+            <span className="btn ghost" title={address}>{short(address)}</span>
+            <button className="btn ghost small" onClick={() => disconnect()}>Desconectar</button>
+          </>
         )}
-        {error && <span className="err small">{error.message.includes("Provider not found") ? "Instalá MetaMask" : error.message}</span>}
+        {error && !alreadyConnected && <span className="err small">{error.message.includes("Provider not found") ? "Instalá MetaMask" : error.message}</span>}
       </div>
     </header>
   );
