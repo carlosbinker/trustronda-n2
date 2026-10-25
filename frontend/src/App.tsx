@@ -46,7 +46,8 @@ export default function App() {
               <h1>Ahorrá en ronda, sin que nadie guarde la plata</h1>
               <p>
                 Cada miembro deja una garantía y aporta lo mismo en cada turno. El pozo lo cobra uno distinto por
-                turno, en orden de inscripción. Si alguien no paga, su garantía cubre el aporte.
+                turno, en un orden que sortea Chainlink VRF cuando se completa el cupo, y que nadie puede arreglar. Si
+                alguien no paga, su garantía cubre el aporte.
               </p>
               <p>Elegí una ronda de la lista o creá una nueva para empezar.</p>
             </div>
