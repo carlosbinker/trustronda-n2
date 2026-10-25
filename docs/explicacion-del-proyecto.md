@@ -266,6 +266,15 @@ Se probó de punta a punta con Playwright contra anvil, con dos cuentas.
 - **¿Por qué no transferís el pozo en `closeRound`?** Por pull payments: si el beneficiario fuera un contrato que revierte, bloquearía la ronda. Además, `closeRound` queda sin llamadas externas.
 - **¿Dónde está la interacción entre contratos?** En varios lugares: la factory despliega `TrustRonda` con `new`; la ronda le pide el sorteo a la factory, que llama al coordinador externo de **Chainlink VRF**; el coordinador responde a la factory, que se lo pasa a la ronda; y la ronda mueve el ERC20 con SafeERC20.
 - **¿Por qué no usaste un proxy?** Porque el valor del producto es que las reglas no cambien a mitad de la ronda. Un proxy le daría a alguien el poder de cambiarlas.
+- **¿Qué pasa si alguien deja de pagar?** La ronda no se frena. Al vencer el plazo del turno, cualquiera llama a `closeRound()`: a cada miembro que no pagó se le toma de la garantía hasta un aporte (`CollateralSlashed`), se le suma un impago (`defaults`) y eso completa el pozo, así que el beneficiario cobra igual. El moroso no queda excluido y al final recupera solo lo que le quedó de garantía. Ejemplo con 3 miembros, aporte 100 y garantía 100, si C cobra en el turno 1 y después abandona:
+
+  | Turno | Pagan | Garantía de C | Pozo | Cobra |
+  |---|---|---|---|---|
+  | 1 | A, B, C | 100 | 300 | C |
+  | 2 | A, B | 100 → 0 | 200 + 100 = 300 | A |
+  | 3 | A, B | 0 | 200 | B |
+
+  C cobró 300 y puso 200 (un aporte y la garantía): ganó 100 a costa de B. Es el riesgo residual documentado en el whitepaper (sección 4.3): con garantía igual a un aporte se cubre un solo impago. El contrato acepta cualquier garantía ≥ aporte, así que el organizador puede pedir (N − 1) aportes para cubrir el peor caso; el roadmap propone garantía dinámica y exclusión del moroso. Lo prueban `test_CloseRound_Default_SlashesCollateral` (el beneficiario cobra completo), `test_CloseRound_DefaultWithoutCollateral_SmallerPot` (con la garantía agotada, el pozo sale más chico) y `test_CloseRound_NobodyPays_AllCollateralSlashed`.
 - **¿Qué pasa si nadie cierra el turno?** Lo puede cerrar cualquiera, y el beneficiario tiene todo el incentivo. En la fase 2 lo hace Chainlink Automation.
 - **¿Por qué VRF y no `block.timestamp` o `blockhash` para sortear?** Porque esos valores los puede influir quien produce el bloque, y además se conocen antes. VRF entrega un número con prueba criptográfica que nadie puede elegir ni anticipar.
 - **¿Qué pasa si Chainlink no responde?** La ronda queda en `Drawing`. Después de 1 día, cualquiera llama a `cancel()` y todos retiran su garantía con `withdraw()`.
