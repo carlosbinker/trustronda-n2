@@ -303,6 +303,7 @@ La **rueda** muestra los lugares en orden de cobro: los que ya cobraron, el turn
 | MockUSDC (tUSD) | [`0x0a464AC93aC01600E6e257c8005f84bC6B586bC3`](https://sepolia.etherscan.io/address/0x0a464AC93aC01600E6e257c8005f84bC6B586bC3) | [Etherscan](https://sepolia.etherscan.io/address/0x0a464AC93aC01600E6e257c8005f84bC6B586bC3#code) · [Sourcify](https://repo.sourcify.dev/11155111/0x0a464AC93aC01600E6e257c8005f84bC6B586bC3) |
 | TrustRondaFactory | [`0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13`](https://sepolia.etherscan.io/address/0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13) | [Etherscan](https://sepolia.etherscan.io/address/0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13#code) · [Sourcify (Exact Match)](https://repo.sourcify.dev/11155111/0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13) |
 | TrustRonda (ronda de la demo, creada por la factory) | [`0x58a04f8558CCF9840265C04358F8fE1281DC6271`](https://sepolia.etherscan.io/address/0x58a04f8558CCF9840265C04358F8fE1281DC6271) | [Etherscan](https://sepolia.etherscan.io/address/0x58a04f8558CCF9840265C04358F8fE1281DC6271#code) · [Sourcify (Exact Match)](https://repo.sourcify.dev/11155111/0x58a04f8558CCF9840265C04358F8fE1281DC6271) |
+| TrustRonda (ronda operada desde el frontend, con un impago) | [`0x01319B9C557c114dCFcb4Fd27791a3D43e031B16`](https://sepolia.etherscan.io/address/0x01319B9C557c114dCFcb4Fd27791a3D43e031B16) | [Etherscan](https://sepolia.etherscan.io/address/0x01319B9C557c114dCFcb4Fd27791a3D43e031B16#code) · [Sourcify](https://repo.sourcify.dev/11155111/0x01319B9C557c114dCFcb4Fd27791a3D43e031B16) |
 | Chainlink VRF v2.5 Coordinator (externo, de Chainlink) | [`0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B`](https://sepolia.etherscan.io/address/0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B) | [docs.chain.link](https://docs.chain.link/vrf/v2-5/supported-networks) |
 | LINK (externo, de Chainlink) | [`0x779877A7B0D9E8603169DdbD7836e478b4624789`](https://sepolia.etherscan.io/address/0x779877A7B0D9E8603169DdbD7836e478b4624789) | [docs.chain.link](https://docs.chain.link/resources/link-token-contracts) |
 | Suscripción de VRF (paga en LINK) | `733240…1387` | [vrf.chain.link](https://vrf.chain.link/sepolia/73324047272116168322164705192790659627066197621599391463534527216801878431387) |
@@ -320,6 +321,8 @@ Las direcciones también están en [`deployments/11155111.json`](deployments/111
 ---
 
 ## 10. Transacciones reales del flujo principal
+
+### Demo por script: todos pagan
 
 Ronda [`0x58a04f8558CCF9840265C04358F8fE1281DC6271`](https://sepolia.etherscan.io/address/0x58a04f8558CCF9840265C04358F8fE1281DC6271), ejecutada el 25/10/2026 con `make demo-start` y `make demo-finish` (registro completo en [`broadcast/Demo.s.sol/11155111/`](broadcast/Demo.s.sol/11155111/)). Chainlink VRF sorteó el orden: **cobra primero Admin, después User2**. Resultado: estado final `Completed` (3) y **0 tUSD en el contrato**: todo lo que entró en garantías y aportes volvió a salir por pull payments, como exige la invariante de solvencia de los tests.
 
@@ -347,6 +350,24 @@ Ronda [`0x58a04f8558CCF9840265C04358F8fE1281DC6271`](https://sepolia.etherscan.i
 - Tx 3: la factory crea la ronda con `new` (patrón factory) y la registra en `isRonda`.
 - Tx 7: el último `join` de la ronda llama a la factory, y la factory, al coordinador de VRF (`DrawRequested`).
 - Tx 8: el nodo de Chainlink le entrega al coordinador el número y su prueba; el coordinador la verifica on-chain y llama a la factory, que solo acepta al coordinador (`OnlyCoordinatorCanFulfill`) y le pasa el número a la ronda (`fulfillDraw`), que sortea el orden con Fisher-Yates y arranca el turno 1.
+
+### Ronda operada desde el frontend, con un impago
+
+Ronda [`0x01319B9C557c114dCFcb4Fd27791a3D43e031B16`](https://sepolia.etherscan.io/address/0x01319B9C557c114dCFcb4Fd27791a3D43e031B16), jugada el 25/10/2026 desde la dApp con dos cuentas de MetaMask (cada `join` y cada `contribute` van precedidos de su `approve`, que se omite en la tabla). Prueba en Sepolia el mecanismo central: en el turno 2, User2, que ya había cobrado, no paga; al vencer el plazo, `closeRound` ejecuta su garantía y Admin cobra el pozo completo. Las dos cuentas terminaron con el saldo inicial y el contrato, con **0 tUSD**.
+
+| # | Paso | Función | Cuenta | Tx |
+|---|---|---|---|---|
+| 1 | Crear ronda (2 miembros, 50 tUSD, turnos de 5 min) | `TrustRondaFactory.createRonda` | Admin `0x54AF…3e79` | [`0xb6c81692…7227`](https://sepolia.etherscan.io/tx/0xb6c81692757fbfe0105487895eb60a33ce427057d38d40273f095057d2627227) |
+| 2 | Inscripción miembro 1 | `TrustRonda.join` | Admin `0x54AF…3e79` | [`0xd1c29333…70fa`](https://sepolia.etherscan.io/tx/0xd1c293333ca32e35876aa6f90a343556fed1413bac6b497f5fb2e78be4bd70fa) |
+| 3 | Inscripción miembro 2: completa el cupo y pide el sorteo | `TrustRonda.join` → factory → VRF | User2 `0x4A4f…D3fE` | [`0x4106dcb1…92ce`](https://sepolia.etherscan.io/tx/0x4106dcb1aa0b101962f50404751f26d78f50aa5338294aca1dc62478a7fb92ce) |
+| 4 | Sorteo de Chainlink VRF: **1. User2, 2. Admin** (5 bloques después) | `rawFulfillRandomWords` → `fulfillDraw` | nodo `0xa572…3E98` | [`0x0213198d…fa0b`](https://sepolia.etherscan.io/tx/0x0213198de3932edead66a6854a012968e97be3b0dbe442a1f2d39ea1d7f0fa0b) |
+| 5 | Turno 1: aporte | `TrustRonda.contribute` | User2 `0x4A4f…D3fE` | [`0xbc635188…cc54`](https://sepolia.etherscan.io/tx/0xbc635188f5e9eb9f0d0965db401b6e9f3155964ebd3efd77d0f0dc5c9fb0cc54) |
+| 6 | Turno 1: aporte | `TrustRonda.contribute` | Admin `0x54AF…3e79` | [`0x0b183405…6285`](https://sepolia.etherscan.io/tx/0x0b1834057e31ec49e8385e0939f759696d841ddcb0741554e536d445d7b46285) |
+| 7 | Cierre del turno 1 antes del plazo: 100 tUSD para User2 | `TrustRonda.closeRound` | Admin `0x54AF…3e79` | [`0x0f242201…bbd6`](https://sepolia.etherscan.io/tx/0x0f2422011cbf96045bc3b022bdfcf6b2ea6ab69d42a0779cef8659b23f9cbbd6) |
+| 8 | Turno 2: aporte (User2 **no paga**) | `TrustRonda.contribute` | Admin `0x54AF…3e79` | [`0x953a2e40…72d1`](https://sepolia.etherscan.io/tx/0x953a2e40596f8b3501c8772ee09273ac1c9578c67bd2fc9bd00a24e6172e72d1) |
+| 9 | **Cierre del turno 2 vencido**: se ejecutan 50 tUSD de la garantía de User2 (`CollateralSlashed`) y Admin cobra 100 → `Completed` | `TrustRonda.closeRound` | User2 `0x4A4f…D3fE` | [`0x4db53d3d…01f5`](https://sepolia.etherscan.io/tx/0x4db53d3d2a75f1dd2e57c460ec1e00c72173b299cb16a13439d1eca695ea01f5) |
+| 10 | Retiro: pozo 100, garantía 0 | `TrustRonda.withdraw` | User2 `0x4A4f…D3fE` | [`0x7ebb3afb…9248`](https://sepolia.etherscan.io/tx/0x7ebb3afb4cb50a141a2d794c770bdd9b5e3ec3a4f0e07f261486d4b124a09248) |
+| 11 | Retiro: pozo 100 + garantía 50 | `TrustRonda.withdraw` | Admin `0x54AF…3e79` | [`0x7f068e81…8b1b`](https://sepolia.etherscan.io/tx/0x7f068e817b6e7b84662149e3508072482122a8109abfaaa7c0986b64973f8b1b) |
 
 ---
 

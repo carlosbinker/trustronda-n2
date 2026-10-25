@@ -56,7 +56,7 @@ Estado al 25/10/2026, con los contratos desplegados y verificados en Sepolia y l
 |---|---|---|
 | Hay un frontend | ✅ | `/frontend` |
 | Interactúa con los contratos y muestra el flujo | ✅ | e2e con Playwright en anvil: flujo completo |
-| Evidencia real on-chain en la demo | ⏳ | Historial con links a Etherscan; grabar en Sepolia |
+| Evidencia real on-chain en la demo | ✅ | Ronda `0x0131…1B16` jugada desde la dApp en Sepolia, con un impago cubierto por la garantía (README, sección 10); falta grabar el video |
 | Complejidad acorde | ✅ | Factory + máquina de estados + garantías + fuzz/invariant |
 | Claro y funcional antes que complejo | ✅ | VRF implementado (lo pidió el profesor); Automation queda en el roadmap |
 
