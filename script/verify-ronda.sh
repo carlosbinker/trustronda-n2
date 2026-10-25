@@ -3,7 +3,11 @@
 # Las rondas se despliegan con `new` desde TrustRondaFactory, así que `forge script --verify` no las verifica solas.
 # Este script reconstruye los argumentos del constructor leyendo los getters on-chain y el bloque de creación.
 #
-# Uso:  ./script/verify-ronda.sh <DIRECCION_RONDA>
+# Uso:  ./script/verify-ronda.sh <DIRECCION_RONDA> [BLOQUE_DE_CREACION]
+#
+# BLOQUE_DE_CREACION es opcional: el bloque de la tx createRonda que creó la ronda.
+# Pasarlo evita buscar el evento RondaCreated con eth_getLogs, que los RPC gratuitos
+# limitan a rangos chicos (Alchemy free: 10 bloques por consulta).
 # Requiere en .env: SEPOLIA_RPC_URL y ETHERSCAN_API_KEY
 set -euo pipefail
 source .env
@@ -24,7 +28,10 @@ JOINDL=$(cast call "$RONDA" "joinDeadline()(uint64)" --rpc-url "$RPC" | awk '{pr
 # joinWindow = joinDeadline - timestamp del bloque en que la factory creó la ronda (evento RondaCreated)
 TOPIC=$(cast keccak "RondaCreated(address,address,address,uint256,uint256,uint8,uint64,uint64)")
 RONDA_TOPIC=$(cast abi-encode "f(address)" "$RONDA")
-BLOCK=$(cast logs --from-block "$FROM_BLOCK" --address "$FACTORY" "$TOPIC" "$RONDA_TOPIC" --rpc-url "$RPC" --json | jq -r '.[0].blockNumber')
+BLOCK="${2:-}"
+if [ -z "$BLOCK" ]; then
+  BLOCK=$(cast logs --from-block "$FROM_BLOCK" --address "$FACTORY" "$TOPIC" "$RONDA_TOPIC" --rpc-url "$RPC" --json | jq -r '.[0].blockNumber')
+fi
 TS=$(cast block "$BLOCK" --field timestamp --rpc-url "$RPC")
 JOINW=$((JOINDL - TS))
 

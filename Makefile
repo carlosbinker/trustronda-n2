@@ -40,8 +40,8 @@ demo-start:         ## Demo on-chain, paso 1: crea una ronda de 2 y la llena (pi
 demo-finish:        ## Demo on-chain, paso 2 (después del sorteo): make demo-finish RONDA=0x...
 	RONDA=$(RONDA) forge script script/Demo.s.sol:DemoFinish --rpc-url sepolia --broadcast -vvv $(SEPOLIA_FLAGS)
 
-verify-ronda:       ## Verifica una ronda creada por la factory: make verify-ronda RONDA=0x...
-	./script/verify-ronda.sh $(RONDA)
+verify-ronda:       ## Verifica una ronda creada por la factory: make verify-ronda RONDA=0x... [BLOCK=bloque de createRonda]
+	./script/verify-ronda.sh $(RONDA) $(BLOCK)
 
 abi:                ## Exporta los ABIs al frontend
 	forge build
