@@ -1,6 +1,6 @@
 # Checklist de entrega: estado
 
-Estado al 24/10/2026, con Chainlink VRF integrado. ✅ hecho y verificado · ⏳ depende del deploy, la grabación o la publicación (lo hace Carlos) · ➖ no aplica.
+Estado al 25/10/2026, con los contratos desplegados y verificados en Sepolia y la demo on-chain completa. ✅ hecho y verificado · ⏳ depende del deploy, la grabación o la publicación (lo hace Carlos) · ➖ no aplica.
 
 ## A. Funcionalidad y smart contracts
 | Ítem | Estado | Evidencia |
@@ -8,11 +8,11 @@ Estado al 24/10/2026, con Chainlink VRF integrado. ✅ hecho y verificado · ⏳
 | Pertinente para Web3 | ✅ | README §1, whitepaper §1–2 |
 | Flujo principal de punta a punta | ✅ | `test_FullCycle_AllPay_EveryoneEndsEven`, `Demo.s.sol`, e2e del frontend en anvil |
 | Hardhat o Foundry | ✅ | Foundry (`foundry.toml`) |
-| Al menos una interacción entre contratos | ✅ | Factory → `new TrustRonda`; TrustRonda → Factory → **Chainlink VRF Coordinator** (externo) → Factory → TrustRonda; TrustRonda → ERC20 con SafeERC20 |
-| Todos los contratos propios desplegados | ⏳ | `make deploy` + `make demo` |
-| Verificados, con URL en el README | ⏳ | `--verify` + `make verify-ronda`; completar README §9 |
-| Desplegado = código del repo | ⏳ | Desplegar desde el commit final, sin cambios locales |
-| Interacción real on-chain | ⏳ | `make demo` y la demo del video; completar README §10 |
+| Al menos una interacción entre contratos | ✅ | Factory → `new TrustRonda`; TrustRonda → Factory → **Chainlink VRF Coordinator** (externo) → Factory → TrustRonda; TrustRonda → ERC20 con SafeERC20. On-chain: tx 3, 7 y 8 de la sección 10 del README |
+| Todos los contratos propios desplegados | ✅ | MockUSDC, TrustRondaFactory y una TrustRonda en Sepolia (README, sección 9; `deployments/11155111.json`) |
+| Verificados, con URL en el README | ✅ | Los tres en Etherscan y Sourcify (Exact Match en la factory y la ronda), con links en la sección 9 del README |
+| Desplegado = código del repo | ✅ | Sourcify da Exact Match contra `contracts/` (mismo fuente, compilador y metadata); los commits posteriores al deploy no tocan los contratos |
+| Interacción real on-chain | ✅ | 21 tx de la demo, incluida la respuesta de VRF (dos turnos completos, ronda `Completed` con saldo 0) en la sección 10 del README y en `broadcast/Demo.s.sol/11155111/` |
 
 ## B. Calidad del código Solidity
 | Ítem | Estado | Evidencia |
@@ -63,12 +63,12 @@ Estado al 24/10/2026, con Chainlink VRF integrado. ✅ hecho y verificado · ⏳
 ## F. Repositorio y documentación
 | Ítem | Estado | Evidencia |
 |---|---|---|
-| Repo público | ⏳ | Crear en GitHub y hacer push |
+| Repo público | ✅ | `github.com/carlosbinker/trustronda-n2` |
 | Commit con la cuenta propia | ⏳ | Commits con `carlosbinker@gmail.com`; confirmar que el email esté en la cuenta de GitHub |
 | Cero secretos | ✅ | `.env` en `.gitignore`; revisado con `git ls-files` |
 | `.env.example` | ✅ | Raíz y `frontend/` |
 | Compila sin warnings sin analizar | ✅ | 0 warnings; los analizados están en README §12 |
-| README con los 10 puntos mínimos | ✅ / ⏳ | Completo; faltan direcciones y hashes reales (§9 y §10) |
+| README con los 10 puntos mínimos | ✅ | Completo, con direcciones, links de verificación y hashes reales (secciones 9 y 10) |
 
 ## G. Video
 | Ítem | Estado | Evidencia |
@@ -85,7 +85,7 @@ Estado al 24/10/2026, con Chainlink VRF integrado. ✅ hecho y verificado · ⏳
 | Un solo repo con contratos y frontend | ✅ | `/contracts` + `/frontend` |
 | Video y whitepaper en el Drive, con apellido y nombre del proyecto | ⏳ | `Binker_TrustRonda_*` |
 | Sin Remix como herramienta de desarrollo (clase 19) | ✅ | Foundry |
-| Entrega individual: requiere excepción de Talento Tech (clase 18) | ⏳ | Pedirla por escrito |
+| Entrega individual: requiere excepción de Talento Tech (clase 18) | ✅ | Autorizada por Talento Tech el 25/10/2026 |
 | Fecha 27/10 (confirmada en la clase 18) | ✅ | — |
 
 ## H. Opcional

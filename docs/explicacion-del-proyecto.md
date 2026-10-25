@@ -201,7 +201,7 @@ function createRonda(...) external returns (address ronda) {
 - **`requestDraw` solo para rondas propias** (`isRonda`): nadie de afuera puede gastar el saldo de la suscripción.
 - **`fulfillDraw` nunca revierte por estado.** Si la ronda ya se canceló, no hace nada. Un callback de VRF que revierte no se reintenta y solo desperdicia el pago.
 - **Timeout:** si VRF no responde en `DRAW_TIMEOUT` (1 día), por ejemplo porque la suscripción se quedó sin LINK, cualquiera puede cancelar y todos recuperan su garantía.
-- **Fisher-Yates en memoria:** se copia el array a `memory`, se mezcla derivando un índice por paso con `keccak256(randomWord, i) % (i + 1)` y se escribe una vez por miembro. Con 12 miembros, el callback consume menos de 225 k de gas.
+- **Fisher-Yates en memoria:** se copia el array a `memory`, se mezcla derivando un índice por paso con `keccak256(randomWord, i) % (i + 1)` y se escribe una vez por miembro. Con 12 miembros, el callback consume 372 k de gas con las reglas de Glamsterdam (el límite, `CALLBACK_GAS_LIMIT`, es 500 k; con 300 k fallaba desde 10 miembros).
 
 **En los tests** se usa el mock oficial `VRFCoordinatorV2_5Mock`: `createSubscription`, `fundSubscription`, `addConsumer(subId, factory)` y, para "ser el oráculo", `fulfillRandomWords(requestId, factory)` o `fulfillRandomWordsWithOverride` con un número elegido por el fuzzer. `testFuzz_DrawIsPermutation` prueba que, para cualquier número y cualquier cupo, el resultado es una permutación exacta de los inscriptos.
 

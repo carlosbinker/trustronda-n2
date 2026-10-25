@@ -243,8 +243,18 @@ Justificación de los `timestamp`, en resumen: se usa `block.timestamp` para **p
    ```
 5. Verificar las rondas creadas por la factory. Se despliegan con `new`, así que `--verify` no las cubre:
    ```bash
-   make verify-ronda RONDA=0x...
+   make verify-ronda RONDA=0x... BLOCK=<bloque de la tx createRonda>
    ```
+   El script reconstruye los argumentos del constructor con los getters de la ronda y verifica en Etherscan y Sourcify. `BLOCK` es opcional: sin él, busca el evento `RondaCreated` con `eth_getLogs`, que los RPC gratuitos limitan a rangos chicos (Alchemy free: 10 bloques por consulta).
+
+### Lo que pasó en el deploy real (lecciones)
+
+**1. Glamsterdam cambió el costo de gas en Sepolia.** Desde el 06/10/2026 Sepolia tiene activo el fork Glamsterdam (EIP-8037): desplegar código cuesta 1.530 gas por byte (antes 200), crear una cuenta 183.600 (antes 32.000) y una celda nueva de storage 97.920 (antes 20.000). El primer `make deploy` falló con *"contract creation code storage out of gas"* porque Foundry simulaba con las reglas viejas y estimaba de menos (los intentos fallidos quedan en `broadcast/Deploy.s.sol/11155111/`). Cambios:
+- Los scripts de Sepolia corren con `--hardfork amsterdam --gas-estimate-multiplier 150` (`SEPOLIA_FLAGS` en el `Makefile`). El gas no usado no se cobra.
+- `make test-amsterdam` y la CI corren los tests con las dos reglas de gas. Así apareció que `CALLBACK_GAS_LIMIT = 300 000` no alcanzaba para el sorteo desde 10 miembros (`testFuzz_DrawIsPermutation`): se subió a **500 000**. Con 12 miembros el callback usa 372 k; con los 2 de la demo, 111 k.
+- Costos medidos on-chain: deploy de la factory 18,6 M de gas y `createRonda` 10,95 M, porque cada ronda despliega su bytecode completo (ver roadmap: clones EIP-1167).
+
+**2. VRF exige reservar el costo máximo del callback, no el real.** El primer pedido de sorteo quedó *pending* con la suscripción en 10 LINK: el coordinador solo responde si el saldo cubre el **max cost**, calculado al gas price tope del key hash (500 gwei) por los 500 k de `CALLBACK_GAS_LIMIT`, que en ese momento eran **75,57 LINK**. El cobro real es mucho menor (el gas en Sepolia estaba en ~0,05 gwei). Se fondeó la suscripción a 100 LINK y el sorteo llegó en minutos. Consecuencia de diseño: subir `CALLBACK_GAS_LIMIT` encarece la reserva, así que no conviene sobredimensionarlo. Para fondear se usa `LINK.transferAndCall` (ERC-677) desde vrf.chain.link: un `transfer` común deja los LINK en el coordinador sin acreditarlos a la suscripción.
 
 ---
 
@@ -266,6 +276,8 @@ npm run dev                     # http://localhost:5173
 | `VITE_DEPLOY_BLOCK` | `deployBlock` del JSON (desde ahí se leen los eventos) |
 | `VITE_RPC_URL` | opcional: RPC propio para lecturas |
 
+> El historial lee eventos con `getLogs` desde `VITE_DEPLOY_BLOCK`. Algunos RPC gratuitos limitan el rango de bloques por consulta; si el historial no carga, usar un RPC sin ese límite en `VITE_RPC_URL`.
+
 Frontend desplegado: **PENDIENTE: completar con la URL de Vercel** (opcional según el checklist).
 
 ### Paso a paso en la dApp
@@ -282,33 +294,57 @@ La **rueda** muestra los lugares en orden de cobro: los que ya cobraron, el turn
 
 ## 9. Red y direcciones desplegadas
 
-**Red:** Ethereum Sepolia (chainId `11155111`)
+**Red:** Ethereum Sepolia (chainId `11155111`) · Deploy: 25/10/2026, bloque `11989040` · Deployer: [`0x54AFEA2896632a4e95Ce1f387AB6F851CFF53e79`](https://sepolia.etherscan.io/address/0x54AFEA2896632a4e95Ce1f387AB6F851CFF53e79)
 
 | Contrato | Dirección | Código verificado |
 |---|---|---|
-| MockUSDC (tUSD) | **PENDIENTE: completar tras `make deploy`** | `https://sepolia.etherscan.io/address/<DIRECCION>#code` |
-| TrustRondaFactory | **PENDIENTE** | `https://sepolia.etherscan.io/address/<DIRECCION>#code` |
-| TrustRonda (ronda de la demo) | **PENDIENTE: la imprime `make demo-start`** | `https://sepolia.etherscan.io/address/<DIRECCION>#code` |
-| Chainlink VRF v2.5 Coordinator (externo, de Chainlink) | `0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B` | [docs.chain.link](https://docs.chain.link/vrf/v2-5/supported-networks) |
-| Suscripción de VRF | **PENDIENTE: Subscription ID** | `https://vrf.chain.link/sepolia/<SUBSCRIPTION_ID>` |
+| MockUSDC (tUSD) | [`0x0a464AC93aC01600E6e257c8005f84bC6B586bC3`](https://sepolia.etherscan.io/address/0x0a464AC93aC01600E6e257c8005f84bC6B586bC3) | [Etherscan](https://sepolia.etherscan.io/address/0x0a464AC93aC01600E6e257c8005f84bC6B586bC3#code) · [Sourcify](https://repo.sourcify.dev/11155111/0x0a464AC93aC01600E6e257c8005f84bC6B586bC3) |
+| TrustRondaFactory | [`0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13`](https://sepolia.etherscan.io/address/0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13) | [Etherscan](https://sepolia.etherscan.io/address/0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13#code) · [Sourcify (Exact Match)](https://repo.sourcify.dev/11155111/0x083d9BC29Cc1b50DEe67D51128dfdf9FFaFD1C13) |
+| TrustRonda (ronda de la demo, creada por la factory) | [`0x58a04f8558CCF9840265C04358F8fE1281DC6271`](https://sepolia.etherscan.io/address/0x58a04f8558CCF9840265C04358F8fE1281DC6271) | [Etherscan](https://sepolia.etherscan.io/address/0x58a04f8558CCF9840265C04358F8fE1281DC6271#code) · [Sourcify (Exact Match)](https://repo.sourcify.dev/11155111/0x58a04f8558CCF9840265C04358F8fE1281DC6271) |
+| Chainlink VRF v2.5 Coordinator (externo, de Chainlink) | [`0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B`](https://sepolia.etherscan.io/address/0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B) | [docs.chain.link](https://docs.chain.link/vrf/v2-5/supported-networks) |
+| LINK (externo, de Chainlink) | [`0x779877A7B0D9E8603169DdbD7836e478b4624789`](https://sepolia.etherscan.io/address/0x779877A7B0D9E8603169DdbD7836e478b4624789) | [docs.chain.link](https://docs.chain.link/resources/link-token-contracts) |
+| Suscripción de VRF (paga en LINK) | `733240…1387` | [vrf.chain.link](https://vrf.chain.link/sepolia/73324047272116168322164705192790659627066197621599391463534527216801878431387) |
+
+Las direcciones también están en [`deployments/11155111.json`](deployments/11155111.json).
+
+| Tx de configuración | Hash |
+|---|---|
+| Deploy de MockUSDC | [`0x78bd567e…9c41`](https://sepolia.etherscan.io/tx/0x78bd567ef7cfee6e7eae17d9a24d0a0aa2d6aaa2d4834d56a2120cc5e8c09c41) |
+| Deploy de TrustRondaFactory | [`0x95bd9653…2e23`](https://sepolia.etherscan.io/tx/0x95bd9653a0fbfaefd8a9b747d964a7b6b5cd35986b76f6cb8e7b7a7d2e482e23) |
+| `addConsumer`: la factory como consumidor de VRF | [`0x3f757ef6…fae5`](https://sepolia.etherscan.io/tx/0x3f757ef64922496a0f7b6223a15e6ebfac51ffec589e29829924b3385f56fae5) |
+| Fondeo de la suscripción (10 LINK) | [`0xdf9cea37…5ce7`](https://sepolia.etherscan.io/tx/0xdf9cea377df1f33fb0c5b77d499a0841a79a2c3f61bf93b64c710f020c245ce7) |
+| Fondeo de la suscripción (+90 LINK, `transferAndCall`) | [`0x7e668919…1128`](https://sepolia.etherscan.io/tx/0x7e6689197d0aac5fd8fb20a5ef6d77a104e0aee87bca5609f6ea21ecd6d31128) |
 
 ---
 
 ## 10. Transacciones reales del flujo principal
 
-Las generan `make demo-start` y `make demo-finish` (están en `broadcast/Demo.s.sol/11155111/`) o el frontend (se ven en el historial de cada ronda).
+Ronda [`0x58a04f8558CCF9840265C04358F8fE1281DC6271`](https://sepolia.etherscan.io/address/0x58a04f8558CCF9840265C04358F8fE1281DC6271), ejecutada el 25/10/2026 con `make demo-start` y `make demo-finish` (registro completo en [`broadcast/Demo.s.sol/11155111/`](broadcast/Demo.s.sol/11155111/)). Chainlink VRF sorteó el orden: **cobra primero Admin, después User2**. Resultado: estado final `Completed` (3) y **0 tUSD en el contrato**: todo lo que entró en garantías y aportes volvió a salir por pull payments, como exige la invariante de solvencia de los tests.
 
-| Paso | Función | Tx |
-|---|---|---|
-| Crear ronda | `TrustRondaFactory.createRonda` | **PENDIENTE** |
-| Inscripción miembro 1 | `TrustRonda.join` | **PENDIENTE** |
-| Inscripción miembro 2 (completa el cupo y pide el sorteo) | `TrustRonda.join` → `TrustRondaFactory.requestDraw` → VRF | **PENDIENTE** |
-| Sorteo del orden (respuesta de Chainlink VRF) | `rawFulfillRandomWords` → `TrustRonda.fulfillDraw` | **PENDIENTE** (tx del coordinador; se ve en la pestaña *Internal Txns* o en vrf.chain.link) |
-| Aporte turno 1 | `TrustRonda.contribute` | **PENDIENTE** |
-| Cierre turno 1 | `TrustRonda.closeRound` | **PENDIENTE** |
-| Retiro del pozo | `TrustRonda.withdraw` | **PENDIENTE** |
-| Cierre turno 2 (Completed) | `TrustRonda.closeRound` | **PENDIENTE** |
-| Retiro final | `TrustRonda.withdraw` | **PENDIENTE** |
+| # | Paso | Función | Cuenta | Tx |
+|---|---|---|---|---|
+| 1 | Faucet de tUSD (miembro 1) | `MockUSDC.faucet` | Admin `0x54AF…3e79` | [`0x2abd699a…44f8`](https://sepolia.etherscan.io/tx/0x2abd699a60e2e475aeecd8668f6a55d58d91db614b11269da32ce081e25244f8) |
+| 2 | Faucet de tUSD (miembro 2) | `MockUSDC.faucet` | User2 `0x4A4f…D3fE` | [`0x211a1aed…0b9f`](https://sepolia.etherscan.io/tx/0x211a1aed8f71abc718deb9ec89df9da05d85057d12f83603963c7705e4d50b9f) |
+| 3 | Crear ronda (2 miembros, aporte y garantía de 50 tUSD) | `TrustRondaFactory.createRonda` → `new TrustRonda` | Admin `0x54AF…3e79` | [`0xb4bd3b04…d011`](https://sepolia.etherscan.io/tx/0xb4bd3b04217916fcb6f5145b3f12e2ea70e46bea1111ec9f938a75406ba4d011) |
+| 4 | Approve de la garantía | `MockUSDC.approve` | Admin `0x54AF…3e79` | [`0xa617caa5…4b0e`](https://sepolia.etherscan.io/tx/0xa617caa5564b3aa0f5edc291fbf50a880ff8b427257502a0cbf15f927d104b0e) |
+| 5 | Inscripción miembro 1 | `TrustRonda.join` | Admin `0x54AF…3e79` | [`0x10b83dd5…4576`](https://sepolia.etherscan.io/tx/0x10b83dd54cc703e46d9305ed29739c75b0bf9bca2c62ae6082c98dbdb5784576) |
+| 6 | Approve de la garantía | `MockUSDC.approve` | User2 `0x4A4f…D3fE` | [`0x52c07b20…5145`](https://sepolia.etherscan.io/tx/0x52c07b20b0d49f9c4e8069055912a2b56f2eb2e526d1de6e9d23a16e2ee35145) |
+| 7 | **Inscripción miembro 2**: completa el cupo y pide el sorteo | `TrustRonda.join` → `TrustRondaFactory.requestDraw` → `VRFCoordinator.requestRandomWords` | User2 `0x4A4f…D3fE` | [`0x39772ffd…f943`](https://sepolia.etherscan.io/tx/0x39772ffd8cb83cdfc6e8354fa74bc873dba971fb7555140b5868b57bc35bf943) |
+| 8 | **Sorteo del orden** (respuesta de Chainlink VRF) | nodo Chainlink → `VRFCoordinator.fulfillRandomWords` → `TrustRondaFactory.rawFulfillRandomWords` → `TrustRonda.fulfillDraw` | nodo `0xa572…3E98` | [`0xb7afa0a0…6cbe`](https://sepolia.etherscan.io/tx/0xb7afa0a0e69bc88f9853dc81b118c8ede19d1b73e4017e58ca1419c297ad6cbe) |
+| 9 | Turno 1: approve + aporte | `approve` + `TrustRonda.contribute` | Admin `0x54AF…3e79` | [`0xf15e0076…9b54`](https://sepolia.etherscan.io/tx/0xf15e00763e0d6619193ac29b38b1190f6f9b1cbf426cea7e07cde4093c229b54) · [`0x838aa9ad…d857`](https://sepolia.etherscan.io/tx/0x838aa9ad499f45cb3c049d8f77f9c83115720e91b8dcbe49a1ab428b1b63d857) |
+| 10 | Turno 1: approve + aporte | `approve` + `TrustRonda.contribute` | User2 `0x4A4f…D3fE` | [`0x0743db7a…bfcd`](https://sepolia.etherscan.io/tx/0x0743db7a9209f45dea058b05bab0349c4b4a111a9630e8488c25b692c894bfcd) · [`0xca2aef8e…2353`](https://sepolia.etherscan.io/tx/0xca2aef8e2d3e948b2ec21016aaea2a8e5e095c362beb4ecf9cb986afc7d72353) |
+| 11 | Cierre del turno 1 (antes del plazo: ya pagaron todos) | `TrustRonda.closeRound` | Admin `0x54AF…3e79` | [`0xfb0bb397…a52b`](https://sepolia.etherscan.io/tx/0xfb0bb3971fcfb0759de304c0a70bba99a24019afd4316a19f847cde47c40a52b) |
+| 12 | Retiro del pozo del turno 1 (pull payment) | `TrustRonda.withdraw` | Admin `0x54AF…3e79` (sorteado 1.º) | [`0xc8a7c0cc…0734`](https://sepolia.etherscan.io/tx/0xc8a7c0ccc8690da0cb79834afa837c81e2099132af54774ac66ba30803fd0734) |
+| 13 | Turno 2: approve + aporte | `approve` + `TrustRonda.contribute` | Admin `0x54AF…3e79` | [`0x83b2044b…4364`](https://sepolia.etherscan.io/tx/0x83b2044bb536056f5a8d7d32068cadc082844e03359df1264e90711c3c644364) · [`0xf17f8c36…6a24`](https://sepolia.etherscan.io/tx/0xf17f8c361f1128460dabafa11e368daf6d745bb5cc5208e07fc8a791a17a6a24) |
+| 14 | Turno 2: approve + aporte | `approve` + `TrustRonda.contribute` | User2 `0x4A4f…D3fE` | [`0xad86a797…38d0`](https://sepolia.etherscan.io/tx/0xad86a797be1e0668d5a810c1951bf9539fe9e2deadbefe8c46b8670c1b1738d0) · [`0x6c31cd95…cf69`](https://sepolia.etherscan.io/tx/0x6c31cd95238ec2f766c8456d5757abc8799241528994f99efb4d9534503acf69) |
+| 15 | Cierre del turno 2 → `Completed` | `TrustRonda.closeRound` | Admin `0x54AF…3e79` | [`0x50a475ab…f118`](https://sepolia.etherscan.io/tx/0x50a475ab384c471b1ffb41150caa2fe5e75d49c8ee1b0213a3ae112bb059f118) |
+| 16 | Retiro del pozo del turno 2 + garantía | `TrustRonda.withdraw` | User2 `0x4A4f…D3fE` (sorteado 2.º) | [`0x3e5dd8be…e4b0`](https://sepolia.etherscan.io/tx/0x3e5dd8be80f0a9d60da950613cf1b8a079911a53aaa9076e64d12ec9ac2ae4b0) |
+| 17 | Retiro de la garantía | `TrustRonda.withdraw` | Admin `0x54AF…3e79` | [`0x5f7cb4c6…4590`](https://sepolia.etherscan.io/tx/0x5f7cb4c6b82134b1651d719bd8f6144bdfca00a4920fbfc15f8ee42267884590) |
+
+**Interacciones entre contratos** (además de cada llamada de la ronda al token con SafeERC20):
+- Tx 3: la factory crea la ronda con `new` (patrón factory) y la registra en `isRonda`.
+- Tx 7: el último `join` de la ronda llama a la factory, y la factory, al coordinador de VRF (`DrawRequested`).
+- Tx 8: el nodo de Chainlink le entrega al coordinador el número y su prueba; el coordinador la verifica on-chain y llama a la factory, que solo acepta al coordinador (`OnlyCoordinatorCanFulfill`) y le pasa el número a la ronda (`fulfillDraw`), que sortea el orden con Fisher-Yates y arranca el turno 1.
 
 ---
 
@@ -331,12 +367,14 @@ Las generan `make demo-start` y `make demo-finish` (están en `broadcast/Demo.s.
 | Control de acceso | `Ownable` (OZ v5, `initialOwner` explícito) solo en la factory, con un único privilegio; sin owner en las rondas. |
 | SafeERC20 | Todas las transferencias de la ronda usan `safeTransfer` / `safeTransferFrom`. |
 | Pull payments | Pozos y garantías se acreditan y cada uno los retira: ningún receptor puede bloquear a otro. |
-| DoS por loops | Loops acotados por `MAX_MEMBERS = 12` (`closeRound`, sorteo Fisher-Yates); `getRondas` paginado. El callback de VRF con 12 miembros queda por debajo de 225 k de gas (límite: 300 k). |
+| DoS por loops | Loops acotados por `MAX_MEMBERS = 12` (`closeRound`, sorteo Fisher-Yates); `getRondas` paginado. El callback de VRF con 12 miembros usa 372 k de gas con las reglas de Glamsterdam (límite: `CALLBACK_GAS_LIMIT` = 500 k), medido con `make test-amsterdam`. |
 | `unchecked` | Solo en contadores acotados por 12 y en restas ya validadas, cada uno con comentario. |
 | `tx.origin`, `delegatecall`, `selfdestruct`, assembly | No se usan. |
 | Proxies | No se usan: la ronda es inmutable a propósito (nadie puede cambiar las reglas a mitad de la ronda). |
 
-**Gas** (`forge test --gas-report`): `join` mediana 129 k (máx. 286 k, el último, que además pide el sorteo) · `contribute` 73 k · `closeRound` 58 k (máx. 200 k con 12 impagos) · `withdraw` 46 k · `createRonda` 1,5 M (despliega una ronda).
+**Gas** (`forge test --gas-report`, reglas previas a Glamsterdam): `join` mediana 129 k (máx. 286 k, el último, que además pide el sorteo) · `contribute` 73 k · `closeRound` 58 k (máx. 200 k con 12 impagos) · `withdraw` 46 k · `createRonda` 1,5 M (despliega una ronda).
+
+**Gas medido en Sepolia** (con Glamsterdam, ronda de 2): `createRonda` 10,95 M · `join` 483 k (el que completa el cupo y pide el sorteo, 765 k) · `contribute` 177 k · `closeRound` 147 k · `withdraw` 60–70 k · deploy de la factory 18,6 M. La diferencia viene del nuevo costo de crear código y de escribir celdas nuevas de storage.
 
 ---
 
@@ -359,7 +397,7 @@ Las generan `make demo-start` y `make demo-finish` (están en `broadcast/Demo.s.
 
 ## 13. Limitaciones conocidas del MVP
 
-- **El sorteo depende de la suscripción de VRF.** Si se queda sin LINK, el pedido queda pendiente. Para que la garantía no quede trabada, después de 1 día cualquiera puede cancelar la ronda. El costo del sorteo lo paga hoy el dueño de la suscripción. → Roadmap: cobrar una pequeña comisión a los miembros para financiarla.
+- **El sorteo depende de la suscripción de VRF.** Si el saldo no cubre el costo máximo del callback (ver sección 7), el pedido queda pendiente; pasó en el deploy real y se resolvió fondeando. Para que la garantía no quede trabada, después de 1 día cualquiera puede cancelar la ronda. El costo del sorteo lo paga hoy el dueño de la suscripción. → Roadmap: cobrar una pequeña comisión a los miembros para financiarla.
 - **La garantía cubre un número limitado de impagos.** Con garantía igual a un aporte, alcanza para un impago. Después, el pozo de los turnos siguientes sale más chico. → Roadmap: garantía proporcional a los turnos restantes y exclusión del moroso.
 - **Un miembro que ya cobró y deja de pagar** solo pierde su garantía. El contrato no puede perseguirlo fuera de la cadena. → Roadmap: garantía decreciente y reputación on-chain.
 - **El cierre del turno depende de que alguien llame a `closeRound`.** Puede hacerlo cualquiera, pero no se dispara solo. → Roadmap: Chainlink Automation.
@@ -384,7 +422,7 @@ Las generan `make demo-start` y `make demo-finish` (están en `broadcast/Demo.s.
 
 **Seguridad y escalabilidad**
 - Auditoría externa y testing formal de las invariantes (Halmos o Certora).
-- Clones mínimos (EIP-1167) en la factory para bajar el costo de crear una ronda (hoy ~1,2 M de gas, porque se despliega el bytecode completo).
+- Clones mínimos (EIP-1167) en la factory para bajar el costo de crear una ronda (hoy 10,95 M de gas en Sepolia con Glamsterdam, porque se despliega el bytecode completo; un clon cuesta una fracción).
 - Si se agregan funciones administrativas, pasar a `AccessControl` con multisig y timelock.
 
 ---

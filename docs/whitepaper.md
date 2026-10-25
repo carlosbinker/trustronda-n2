@@ -76,7 +76,7 @@ Usuario (MetaMask) ──► Frontend React + wagmi/viem
 ### 3.2 Modelo de datos y gas
 - Los siete parámetros de la ronda son `immutable`: se guardan en el bytecode y su lectura cuesta lo mismo que una constante.
 - `status`, `currentRound`, `paidCount`, `roundDeadline` y `drawRequestedAt` comparten **un slot** (8 + 8 + 8 + 64 + 64 bits). Cada transición escribe un solo slot.
-- El sorteo se hace en memoria (Fisher-Yates, un índice por paso derivado de `keccak256(randomWord, i)`) y escribe una sola vez por miembro. Con 12 miembros, el callback de VRF consume menos de 225 k de gas, con un límite de 300 k.
+- El sorteo se hace en memoria (Fisher-Yates, un índice por paso derivado de `keccak256(randomWord, i)`) y escribe una sola vez por miembro. Con 12 miembros, el callback de VRF consume 372 k de gas con las reglas de Glamsterdam, activas en Sepolia desde el 06/10/2026, con un límite de 500 k (`CALLBACK_GAS_LIMIT`).
 - `MemberInfo { uint128 collateral; uint8 position; uint8 defaults; bool isMember; }` ocupa **un slot** por miembro.
 - `closeRound` cachea en memoria las variables de storage y solo recorre a los miembros cuando hay impagos. El cupo máximo de 12 acota el peor caso (unos 200 k de gas medidos).
 

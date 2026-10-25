@@ -54,7 +54,7 @@ Slither avisa que se compara contra `block.timestamp`, porque el proposer del bl
 | Reentrancy | CEI en `join`, `contribute` y `withdraw`, más `nonReentrant`. `closeRound` no hace llamadas externas. En `rawFulfillRandomWords` se borra el pedido antes de llamar a la ronda. |
 | Sorteo manipulable | Chainlink VRF con prueba verificada on-chain. Coordinador `immutable`, sin `setCoordinator`: por eso no se hereda `VRFConsumerBaseV2Plus`, que le daría al owner la posibilidad de cambiarlo y arreglar el sorteo. Callback solo del coordinador y entrega solo de la factory. |
 | VRF que no responde | `DRAW_TIMEOUT = 1 día`: después, cualquiera cancela y todos recuperan la garantía. |
-| Callback de VRF que revierte | `fulfillDraw` no revierte si la ronda ya no está en `Drawing`, y un requestId desconocido se ignora. El callback medido con 12 miembros está por debajo de 225 k de gas, contra un límite de 300 k. |
+| Callback de VRF que revierte | `fulfillDraw` no revierte si la ronda ya no está en `Drawing`, y un requestId desconocido se ignora. El callback medido con 12 miembros usa 372 k de gas con las reglas de Glamsterdam (`make test-amsterdam`), contra un límite de 500 k. |
 | Gasto de la suscripción por terceros | `requestDraw` solo lo pueden llamar rondas creadas por la factory. |
 | Tokens raros (fee-on-transfer, rebasing) | Lista blanca de tokens en la factory (`setTokenAllowed`, solo el owner). |
 | Transferencias ERC20 que no revierten | `SafeERC20` (`safeTransfer` / `safeTransferFrom`). |
