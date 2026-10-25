@@ -321,7 +321,7 @@ contract TrustRonda is ReentrancyGuard {
         collateralAmount = collateralAmount_;
         maxMembers = maxMembers_;
         roundDuration = roundDuration_;
-        joinDeadline = uint64(block.timestamp) + joinWindow_;
+        joinDeadline = _now() + joinWindow_;
         // status arranca en Open (valor 0 del enum)
     }
 
@@ -354,7 +354,7 @@ contract TrustRonda is ReentrancyGuard {
 
         bool full = position + 1 == maxMembers;
         if (full) {
-            uint64 now_ = uint64(block.timestamp);
+            uint64 now_ = _now();
             status = RondaStatus.Drawing;
             drawRequestedAt = now_;
             emit RondaFull(now_);
@@ -362,6 +362,9 @@ contract TrustRonda is ReentrancyGuard {
 
         // Interactions
         token.safeTransferFrom(msg.sender, address(this), collateralAmount);
+        // Falso positivo de reentrancy-no-eth: join() ya está protegido por nonReentrant y `factory` es el contrato
+        // inmutable que desplegó la ronda; el estado (Drawing) quedó escrito antes de la llamada (CEI).
+        // forge-lint: disable-next-line(reentrancy-no-eth)
         if (full) factory.requestDraw(); // factory → Chainlink VRF (contratos confiables e inmutables)
     }
 
@@ -385,7 +388,7 @@ contract TrustRonda is ReentrancyGuard {
                 --i;
             }
         }
-        for (uint256 i; i < n;) {
+        for (uint256 i = 0; i < n;) {
             _members[i] = order[i];
             // casting to 'uint8' is safe because i < n <= MAX_MEMBERS (12)
             // forge-lint: disable-next-line(unsafe-typecast)
@@ -395,7 +398,7 @@ contract TrustRonda is ReentrancyGuard {
             }
         }
 
-        uint64 deadline = uint64(block.timestamp) + roundDuration;
+        uint64 deadline = _now() + roundDuration;
         status = RondaStatus.Active;
         roundDeadline = deadline;
         emit PayoutOrderDrawn(randomWord, order);
@@ -445,7 +448,7 @@ contract TrustRonda is ReentrancyGuard {
         uint8 defaults = 0; // inicialización explícita (Slither: uninitialized-local)
 
         if (paid < n) {
-            for (uint256 i; i < n;) {
+            for (uint256 i = 0; i < n;) {
                 address member = _members[i];
                 if (!_hasPaid[round][member]) {
                     MemberInfo storage info = _memberInfo[member];
@@ -482,7 +485,7 @@ contract TrustRonda is ReentrancyGuard {
             roundDeadline = 0;
             emit RondaCompleted();
         } else {
-            uint64 nextDeadline = uint64(block.timestamp) + roundDuration;
+            uint64 nextDeadline = _now() + roundDuration;
             roundDeadline = nextDeadline;
             emit NewRound(round, nextDeadline);
         }
@@ -579,6 +582,14 @@ contract TrustRonda is ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────
     // Funciones internas
     // ─────────────────────────────────────────────────────────────────────
+
+    /// @notice Timestamp del bloque actual como `uint64` (el tamaño de los plazos empaquetados en storage).
+    /// @return Timestamp actual.
+    function _now() internal view returns (uint64) {
+        // casting to 'uint64' is safe because block.timestamp no puede superar 2^64 s (~584 mil millones de años)
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return uint64(block.timestamp);
+    }
 
     /// @notice Revierte si la ronda no está en el estado esperado.
     /// @dev La lógica del modifier vive en una función para no duplicar bytecode en cada uso.

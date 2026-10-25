@@ -1,37 +1,37 @@
 INFO:Detectors:
 Detector: reentrancy-benign
-Reentrancy in TrustRondaFactory.requestDraw() (contracts/TrustRondaFactory.sol#216-231):
+Reentrancy in TrustRondaFactory.requestDraw() (contracts/TrustRondaFactory.sol#220-238):
 	External calls:
-	- requestId = vrfCoordinator.requestRandomWords(VRFV2PlusClient.RandomWordsRequest({keyHash:keyHash,subId:subscriptionId,requestConfirmations:REQUEST_CONFIRMATIONS,callbackGasLimit:CALLBACK_GAS_LIMIT,numWords:NUM_WORDS,extraArgs:VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment:nativePayment}))})) (contracts/TrustRondaFactory.sol#218-227)
+	- requestId = vrfCoordinator.requestRandomWords(VRFV2PlusClient.RandomWordsRequest({keyHash:keyHash,subId:subscriptionId,requestConfirmations:REQUEST_CONFIRMATIONS,callbackGasLimit:CALLBACK_GAS_LIMIT,numWords:NUM_WORDS,extraArgs:VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment:nativePayment}))})) (contracts/TrustRondaFactory.sol#222-231)
 	State variables written after the call(s):
-	- drawRequestOf[msg.sender] = requestId (contracts/TrustRondaFactory.sol#229)
-	- drawRequests[requestId] = msg.sender (contracts/TrustRondaFactory.sol#228)
+	- drawRequestOf[msg.sender] = requestId (contracts/TrustRondaFactory.sol#233)
+	- drawRequests[requestId] = msg.sender (contracts/TrustRondaFactory.sol#232)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
 INFO:Detectors:
 Detector: reentrancy-events
-Reentrancy in TrustRondaFactory.requestDraw() (contracts/TrustRondaFactory.sol#216-231):
+Reentrancy in TrustRondaFactory.requestDraw() (contracts/TrustRondaFactory.sol#220-238):
 	External calls:
-	- requestId = vrfCoordinator.requestRandomWords(VRFV2PlusClient.RandomWordsRequest({keyHash:keyHash,subId:subscriptionId,requestConfirmations:REQUEST_CONFIRMATIONS,callbackGasLimit:CALLBACK_GAS_LIMIT,numWords:NUM_WORDS,extraArgs:VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment:nativePayment}))})) (contracts/TrustRondaFactory.sol#218-227)
+	- requestId = vrfCoordinator.requestRandomWords(VRFV2PlusClient.RandomWordsRequest({keyHash:keyHash,subId:subscriptionId,requestConfirmations:REQUEST_CONFIRMATIONS,callbackGasLimit:CALLBACK_GAS_LIMIT,numWords:NUM_WORDS,extraArgs:VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment:nativePayment}))})) (contracts/TrustRondaFactory.sol#222-231)
 	Event emitted after the call(s):
-	- DrawRequested(msg.sender,requestId) (contracts/TrustRondaFactory.sol#230)
+	- DrawRequested(msg.sender,requestId) (contracts/TrustRondaFactory.sol#237)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
 INFO:Detectors:
 Detector: timestamp
 MockUSDC.faucet() (contracts/MockUSDC.sol#38-46) uses timestamp for comparisons
 	Dangerous comparisons:
 	- last != 0 && block.timestamp < last + FAUCET_COOLDOWN (contracts/MockUSDC.sol#40)
-TrustRonda.join() (contracts/TrustRonda.sol#336-366) uses timestamp for comparisons
+TrustRonda.join() (contracts/TrustRonda.sol#336-369) uses timestamp for comparisons
 	Dangerous comparisons:
 	- block.timestamp > joinDeadline (contracts/TrustRonda.sol#338)
-TrustRonda.contribute() (contracts/TrustRonda.sol#408-426) uses timestamp for comparisons
+TrustRonda.contribute() (contracts/TrustRonda.sol#411-429) uses timestamp for comparisons
 	Dangerous comparisons:
-	- block.timestamp > deadline (contracts/TrustRonda.sol#413)
-TrustRonda.closeRound() (contracts/TrustRonda.sol#433-489) uses timestamp for comparisons
+	- block.timestamp > deadline (contracts/TrustRonda.sol#416)
+TrustRonda.closeRound() (contracts/TrustRonda.sol#436-492) uses timestamp for comparisons
 	Dangerous comparisons:
-	- paid < n && block.timestamp <= deadline (contracts/TrustRonda.sol#440)
-TrustRonda.cancel() (contracts/TrustRonda.sol#495-509) uses timestamp for comparisons
+	- paid < n && block.timestamp <= deadline (contracts/TrustRonda.sol#443)
+TrustRonda.cancel() (contracts/TrustRonda.sol#498-512) uses timestamp for comparisons
 	Dangerous comparisons:
-	- msg.sender != organizer && block.timestamp <= joinDeadline (contracts/TrustRonda.sol#498)
-	- block.timestamp <= availableAt (contracts/TrustRonda.sol#503)
+	- msg.sender != organizer && block.timestamp <= joinDeadline (contracts/TrustRonda.sol#501)
+	- block.timestamp <= availableAt (contracts/TrustRonda.sol#506)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
 INFO:Slither:. analyzed (21 contracts with 102 detectors), 7 result(s) found

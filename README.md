@@ -162,7 +162,7 @@ git submodule update --init --recursive
 forge build                 # o: make build
 ```
 
-El proyecto compila **sin warnings** de solc ni de `forge lint` (ver [Warnings analizados](#12-warnings-analizados)).
+El proyecto compila **sin warnings** de solc ni de `forge lint` (probado con Foundry 1.5.1 y 1.8.6; ver [Warnings analizados](#12-warnings-analizados)).
 
 ---
 
@@ -174,7 +174,7 @@ forge coverage --no-match-coverage "(script|test|lib)" # o: make coverage
 forge test --gas-report                            # consumo de gas por función
 ```
 
-**Resultado:** 70 tests, 0 fallas ([`docs/reports/forge-test.txt`](docs/reports/forge-test.txt)).
+**Resultado:** 70 tests, 0 fallas. Con Foundry 1.8 o posterior, el resumen dice "67 tests" porque agrupa las 4 invariantes en una sola entrada ([`docs/reports/forge-test.txt`](docs/reports/forge-test.txt)).
 
 | Suite | Tests | Qué cubre |
 |---|---|---|
@@ -188,9 +188,9 @@ forge test --gas-report                            # consumo de gas por función
 
 | Archivo | Líneas | Statements | Branches | Funciones |
 |---|---|---|---|---|
-| `MockUSDC.sol` | 100 % (9/9) | 100 % (10/10) | 100 % (1/1) | 100 % (2/2) |
-| `TrustRonda.sol` | 100 % (143/143) | 100 % (171/171) | 100 % (31/31) | 100 % (19/19) |
-| `TrustRondaFactory.sol` | 100 % (43/43) | 100 % (47/47) | 100 % (8/8) | 100 % (7/7) |
+| `MockUSDC.sol` | 100 % (10/10) | 100 % (10/10) | 100 % (1/1) | 100 % (3/3) |
+| `TrustRonda.sol` | 100 % (145/145) | 100 % (175/175) | 100 % (33/33) | 100 % (20/20) |
+| `TrustRondaFactory.sol` | 100 % (43/43) | 100 % (47/47) | 100 % (10/10) | 100 % (7/7) |
 | **Total** | **100 %** | **100 %** | **100 %** | **100 %** |
 
 Se excluyen `test/` y `script/` (código auxiliar) y `lib/` (librerías de terceros, incluido el mock de Chainlink), como permite el enunciado. Los tests simulan al oráculo con el **mock oficial de Chainlink** (`VRFCoordinatorV2_5Mock`).
@@ -348,6 +348,11 @@ Las generan `make demo-start` y `make demo-finish` (están en `broadcast/Demo.s.
 | `forge lint` | `screaming-snake-case-immutable` | Excluido en `foundry.toml`: los `immutable` (`token`, `contributionAmount`…) son la API pública que lee el frontend y se leen como parámetros, no como constantes. |
 | `forge lint` | `unsafe-cheatcode` (`vm.readFile` en `Demo.s.sol`) | Intencional, limitado por `fs_permissions` a `./deployments`. |
 | `forge lint` | `unwrapped-modifier-logic` | **Corregido:** la lógica de los modifiers se movió a `_checkStatus` y `_checkMember`. |
+| `forge lint` (1.8) | `uninitialized-local` en los `for (uint256 i; …)` | **Corregido:** se inicializan explícitamente (`uint256 i = 0`). |
+| `forge lint` (1.8) | `unsafe-typecast` en `uint64(block.timestamp)` (×4) | **Corregido:** un único helper `_now()` con el cast justificado (2^64 s ≈ 584 mil millones de años). |
+| `forge lint` (1.8) | `block-timestamp` (×6) | Excluido en `foundry.toml`: mismo análisis que el `timestamp` de Slither (plazos, no aleatoriedad ni montos). |
+| `forge lint` (1.8) | `reentrancy-events` en `createRonda` y `requestDraw` | Aceptados, con comentario en el código: el evento necesita la dirección o el requestId que recién existen después de la llamada a un contrato confiable (la ronda recién creada o el coordinador de VRF). |
+| `forge lint` (1.8) | `reentrancy-no-eth` en `join` → `requestDraw` | Falso positivo: `join` tiene `nonReentrant`, la factory es `immutable` y el estado ya se escribió antes (CEI). Comentado en el código. |
 | Vite | Chunk > 500 kB | viem + wagmi pesan unos 180 kB gzip. Es aceptable para una dApp de una página, así que se subió el umbral. |
 
 ---

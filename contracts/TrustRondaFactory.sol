@@ -196,6 +196,9 @@ contract TrustRondaFactory is Ownable, ITrustRondaDrawer {
         _rondas.push(ronda);
         isRonda[ronda] = true;
 
+        // Aceptado (reentrancy-events): el evento necesita la dirección de la ronda, que recién existe después del
+        // `new`; la llamada externa es a un contrato que esta misma factory acaba de desplegar.
+        // forge-lint: disable-start(reentrancy-events)
         emit RondaCreated(
             ronda,
             msg.sender,
@@ -206,6 +209,7 @@ contract TrustRondaFactory is Ownable, ITrustRondaDrawer {
             roundDuration,
             newRonda.joinDeadline()
         );
+        // forge-lint: disable-end(reentrancy-events)
     }
 
     /// @notice Pide a Chainlink VRF el número aleatorio para sortear el orden de cobro de la ronda que llama.
@@ -227,6 +231,9 @@ contract TrustRondaFactory is Ownable, ITrustRondaDrawer {
         );
         drawRequests[requestId] = msg.sender;
         drawRequestOf[msg.sender] = requestId;
+        // Aceptado (reentrancy-events): el requestId lo devuelve el coordinador de VRF (immutable, de Chainlink);
+        // no se puede emitir antes de la llamada. Ver docs/slither.md.
+        // forge-lint: disable-next-line(reentrancy-events)
         emit DrawRequested(msg.sender, requestId);
     }
 

@@ -19,7 +19,9 @@ fs_permissions = [{ access = "read-write", path = "./deployments" }]
 # Las variables immutable de TrustRonda (token, organizer, contributionAmount, ...) se dejan en camelCase a
 # propósito: son la API pública que lee el frontend y se leen como parámetros de la ronda, no como constantes.
 # Analizado y aceptado; ver README > "Warnings analizados".
-exclude_lints = ["screaming-snake-case-immutable"]
+# block-timestamp: se usa solo para plazos de calendario (mínimo 5 min), nunca para aleatoriedad (eso lo da
+# Chainlink VRF) ni para calcular montos. Mismo análisis que el finding `timestamp` de Slither (docs/slither.md).
+exclude_lints = ["screaming-snake-case-immutable", "block-timestamp"]
 
 [fuzz]
 runs = 512
