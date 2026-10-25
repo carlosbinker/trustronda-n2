@@ -274,9 +274,11 @@ npm run dev                     # http://localhost:5173
 | `VITE_FACTORY_ADDRESS` | dirección de `TrustRondaFactory` |
 | `VITE_USDC_ADDRESS` | dirección de `MockUSDC` |
 | `VITE_DEPLOY_BLOCK` | `deployBlock` del JSON (desde ahí se leen los eventos) |
-| `VITE_RPC_URL` | opcional: RPC propio para lecturas |
+| `VITE_RPC_URL` | RPC para lecturas; recomendado `https://ethereum-sepolia-rpc.publicnode.com` (público, sin clave). Las transacciones las firma y envía MetaMask. |
 
-> El historial lee eventos con `getLogs` desde `VITE_DEPLOY_BLOCK`. Algunos RPC gratuitos limitan el rango de bloques por consulta; si el historial no carga, usar un RPC sin ese límite en `VITE_RPC_URL`.
+> **No poner un RPC con API key en `VITE_RPC_URL`:** las variables `VITE_` quedan dentro del JavaScript que descarga el navegador, y en Vercel serían públicas.
+>
+> El historial lee los eventos con `getLogs` desde `VITE_DEPLOY_BLOCK`, en tramos de hasta 50.000 bloques que se achican solos (hasta 10) si el RPC limita el rango. En cada refresco solo pide los bloques nuevos (`frontend/src/lib/events.ts`).
 
 Frontend desplegado: **PENDIENTE: completar con la URL de Vercel** (opcional según el checklist).
 

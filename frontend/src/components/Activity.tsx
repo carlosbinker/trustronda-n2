@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { usePublicClient } from "wagmi";
 import type { Address } from "viem";
-import { trustRondaAbi } from "../abi/TrustRonda";
 import { DEPLOY_BLOCK } from "../config";
+import { getRondaEvents } from "../lib/events";
 import { fmtUsd, short, txUrl } from "../lib/format";
 
 type Args = Record<string, unknown>;
@@ -29,7 +29,7 @@ export default function Activity({ address }: { address: Address }) {
   const client = usePublicClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["events", address],
-    queryFn: () => client!.getContractEvents({ address, abi: trustRondaAbi, fromBlock: DEPLOY_BLOCK }),
+    queryFn: () => getRondaEvents(client!, address, DEPLOY_BLOCK),
     enabled: !!client,
   });
 
