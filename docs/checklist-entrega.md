@@ -91,4 +91,4 @@ Estado al 25/10/2026, con los contratos desplegados y verificados en Sepolia y l
 ## H. Opcional
 | Ítem | Estado | Evidencia |
 |---|---|---|
-| Frontend desplegado | ⏳ | Vercel (pendiente); hoy se corre local con `npm run dev` |
+| Frontend desplegado | ✅ | https://trustronda-n2.vercel.app (Vercel) |

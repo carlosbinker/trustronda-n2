@@ -5,6 +5,8 @@
 Proyecto final del *Ethereum Developer Pack, Nivel 2: Smart Contract Developer* (ETH Kipu / Talento Tech, 2026).
 Autor: Carlos Binker.
 
+**dApp en vivo (Sepolia): https://trustronda-n2.vercel.app** · necesita MetaMask en la red Sepolia.
+
 > Red: **Sepolia** · Contratos: **Solidity 0.8.24 + OpenZeppelin 5.1 + Chainlink VRF v2.5** · Framework: **Foundry** · Frontend: **React + Vite + wagmi/viem**
 > Tests: **67 pasan** · Coverage: **100 %** en líneas, statements, branches y funciones · Slither: **sin findings High ni Medium**
 
@@ -300,7 +302,7 @@ npm run dev                     # http://localhost:5173
 >
 > El historial lee los eventos con `getLogs` desde `VITE_DEPLOY_BLOCK`, en tramos de hasta 50.000 bloques que se achican solos (hasta 10) si el RPC limita el rango. En cada refresco solo pide los bloques nuevos (`frontend/src/lib/events.ts`).
 
-Frontend desplegado: **PENDIENTE: completar con la URL de Vercel** (opcional según el checklist).
+Frontend desplegado en Vercel: **https://trustronda-n2.vercel.app** (se redespliega solo con cada push a `main`; las mismas cinco variables están cargadas en el panel de Vercel).
 
 ### Paso a paso en la dApp
 1. **Conectar wallet** (MetaMask en Sepolia; si está en otra red, aparece el botón para cambiar).
