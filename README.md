@@ -141,7 +141,7 @@ trustronda-n2/
 │   └── verify-ronda.sh     # verifica rondas creadas por la factory
 ├── deployments/            # direcciones por chainId (las genera Deploy)
 ├── frontend/               # dApp React + Vite + wagmi/viem
-├── docs/                   # whitepaper, Slither, explicación, guion del video
+├── docs/                   # whitepaper, Slither, explicación y checklist
 ├── foundry.toml · Makefile · .env.example
 └── lib/                    # submódulos: openzeppelin-contracts v5.1.0, forge-std v1.9.6, chainlink-brownie-contracts 1.3.0
 ```
@@ -246,6 +246,26 @@ Justificación de los `timestamp`, en resumen: se usa `block.timestamp` para **p
    make verify-ronda RONDA=0x... BLOCK=<bloque de la tx createRonda>
    ```
    El script reconstruye los argumentos del constructor con los getters de la ronda y verifica en Etherscan y Sourcify. `BLOCK` es opcional: sin él, busca el evento `RondaCreated` con `eth_getLogs`, que los RPC gratuitos limitan a rangos chicos (Alchemy free: 10 bloques por consulta).
+
+### Ensayo local en anvil (opcional)
+Para probar todo sin gastar en Sepolia, con el mock oficial de VRF:
+```bash
+anvil &                                         # nodo local con cuentas de prueba
+cast rpc anvil_mine 5                           # el mock necesita blockhash del bloque anterior
+export PRIVATE_KEY=<clave de la cuenta 0 de anvil> PRIVATE_KEY_2=<clave de la cuenta 1>
+MOCK=$(forge create lib/chainlink-brownie-contracts/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol:VRFCoordinatorV2_5Mock \
+  --rpc-url http://127.0.0.1:8545 --private-key $PRIVATE_KEY --broadcast \
+  --constructor-args 100000000000000000 1000000000 4000000000000000 | grep "Deployed to" | awk '{print $3}')
+cast send $MOCK "createSubscription()" --rpc-url http://127.0.0.1:8545 --private-key $PRIVATE_KEY
+SUB=$(cast call $MOCK "getActiveSubscriptionIds(uint256,uint256)(uint256[])" 0 10 --rpc-url http://127.0.0.1:8545 | tr -d '[]')
+cast send $MOCK "fundSubscription(uint256,uint256)" $SUB 1000000000000000000000 --rpc-url http://127.0.0.1:8545 --private-key $PRIVATE_KEY
+VRF_COORDINATOR=$MOCK VRF_SUBSCRIPTION_ID=$SUB VRF_KEY_HASH=0x0000000000000000000000000000000000000000000000000000000000000001 \
+  forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+forge script script/Demo.s.sol:DemoStart --rpc-url http://127.0.0.1:8545 --broadcast
+# hacer de oráculo: requestId = factory.drawRequestOf(ronda)
+cast send $MOCK "fulfillRandomWords(uint256,address)" <REQUEST_ID> <FACTORY> --rpc-url http://127.0.0.1:8545 --private-key $PRIVATE_KEY
+RONDA=<ronda> forge script script/Demo.s.sol:DemoFinish --rpc-url http://127.0.0.1:8545 --broadcast
+```
 
 ### Lo que pasó en el deploy real (lecciones)
 
@@ -455,9 +475,7 @@ Ronda [`0x01319B9C557c114dCFcb4Fd27791a3D43e031B16`](https://sepolia.etherscan.i
 - [`docs/whitepaper.md`](docs/whitepaper.md): problema, solución, arquitectura implementada, seguridad, riesgos y roadmap.
 - [`docs/explicacion-del-proyecto.md`](docs/explicacion-del-proyecto.md): explicación detallada de cada parte del código.
 - [`docs/slither.md`](docs/slither.md): informe de análisis estático.
-- [`docs/guion-video.md`](docs/guion-video.md): guion del video de 5 minutos.
-- [`docs/guia-entrega.md`](docs/guia-entrega.md): pasos para desplegar, verificar, publicar en GitHub y entregar.
-- [`docs/practica-remix.md`](docs/practica-remix.md): práctica guiada para jugar una ronda a mano en Remix VM.
+- [`docs/checklist-entrega.md`](docs/checklist-entrega.md): estado de cada ítem del checklist de la cátedra, con su evidencia.
 
 ## Licencia
 

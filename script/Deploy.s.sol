@@ -16,7 +16,7 @@ import {IVRFCoordinatorV2Plus} from
 ///      (para que este script pueda llamar a addConsumer). Coordinador y key hash de Sepolia: valores de
 ///      docs.chain.link/vrf/v2-5/supported-networks, sobrescribibles con VRF_COORDINATOR y VRF_KEY_HASH.
 ///      Para ensayar en anvil: desplegar antes VRFCoordinatorV2_5Mock, crear y fondear una suscripción con cast y
-///      pasar VRF_COORDINATOR y VRF_SUBSCRIPTION_ID (ver docs/guia-entrega.md, "Ensayo local").
+///      pasar VRF_COORDINATOR y VRF_SUBSCRIPTION_ID (ver README, sección 7, "Ensayo local en anvil").
 contract Deploy is Script {
     /// @dev Chainlink VRF v2.5, Ethereum Sepolia (docs.chain.link/vrf/v2-5/supported-networks).
     address internal constant SEPOLIA_VRF_COORDINATOR = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;

@@ -15,7 +15,7 @@ Un solo repositorio contiene los contratos (Foundry) y el frontend (React):
 | `script/` | Deploy, demo y verificación | `forge script`, `cast` |
 | `deployments/` | Direcciones por red (JSON) | lo escribe `Deploy.s.sol` |
 | `frontend/` | La dApp | `npm run dev` |
-| `docs/` | Whitepaper, Slither, esta guía, guion | — |
+| `docs/` | Whitepaper, Slither, esta explicación y el checklist de entrega | — |
 | `lib/` | OpenZeppelin v5.1.0, Chainlink contracts 1.3.0 y forge-std como submódulos git | `git submodule` |
 
 `foundry.toml` define `src = "contracts"` porque el enunciado pide la carpeta `/contracts` (Foundry usa `src/` por defecto), fija `solc 0.8.24` con optimizer en 200 runs y lee el RPC y la API key de Etherscan **desde variables de entorno**. Así no hay secretos en el repo.
@@ -184,7 +184,7 @@ function createRonda(...) external returns (address ronda) {
 
 ## Parte 3b: Chainlink VRF, el sorteo del orden de cobro
 
-**Por qué:** en una ronda, cobrar primero equivale a un préstamo sin interés y cobrar último, a ahorrar. Si el orden lo decide alguien, o un valor que alguien puede influir como `block.timestamp` o `blockhash`, se puede arreglar. Cristian lo dijo en la mentoría [0:33:44]: sin una conexión real con otro contrato "no llegaría a la dificultad que pretendemos en el curso. Pero si vos sacás un VRF con Chainlink, el proyecto va bien". VRF (*Verifiable Random Function*) entrega un número aleatorio junto con una **prueba criptográfica** que el coordinador verifica on-chain antes de entregarlo.
+**Por qué:** en una ronda, cobrar primero equivale a un préstamo sin interés y cobrar último, a ahorrar. Si el orden lo decide alguien, o un valor que alguien puede influir como `block.timestamp` o `blockhash`, se puede arreglar. Además, VRF suma la interacción con un contrato externo real (el coordinador de Chainlink), no solo entre contratos propios. VRF (*Verifiable Random Function*) entrega un número aleatorio junto con una **prueba criptográfica** que el coordinador verifica on-chain antes de entregarlo.
 
 **El circuito (cuatro llamadas entre contratos):**
 ```
@@ -261,7 +261,7 @@ Se probó de punta a punta con Playwright contra anvil, con dos cuentas.
 
 ---
 
-## Preguntas probables en la corrección (y respuestas cortas)
+## Decisiones de diseño (preguntas frecuentes)
 
 - **¿Por qué no transferís el pozo en `closeRound`?** Por pull payments: si el beneficiario fuera un contrato que revierte, bloquearía la ronda. Además, `closeRound` queda sin llamadas externas.
 - **¿Dónde está la interacción entre contratos?** En varios lugares: la factory despliega `TrustRonda` con `new`; la ronda le pide el sorteo a la factory, que llama al coordinador externo de **Chainlink VRF**; el coordinador responde a la factory, que se lo pasa a la ronda; y la ronda mueve el ERC20 con SafeERC20.

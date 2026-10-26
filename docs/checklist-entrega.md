@@ -73,8 +73,8 @@ Estado al 25/10/2026, con los contratos desplegados y verificados en Sepolia y l
 ## G. Video
 | Ítem | Estado | Evidencia |
 |---|---|---|
-| ≤ 5 minutos | ⏳ | Guion de 5:00 en `docs/guion-video.md` |
-| Muestra el funcionamiento real | ⏳ | Segmento 2:00–3:40 en vivo en Sepolia |
+| ≤ 5 minutos | ⏳ | `Binker_TrustRonda_Video.mp4` (entregado en el Drive) |
+| Muestra el funcionamiento real | ⏳ | Flujo completo desde el frontend, en vivo en Sepolia |
 
 ## Indicaciones del profesor (clases 19 y 20)
 | Ítem | Estado | Evidencia |
@@ -91,4 +91,4 @@ Estado al 25/10/2026, con los contratos desplegados y verificados en Sepolia y l
 ## H. Opcional
 | Ítem | Estado | Evidencia |
 |---|---|---|
-| Frontend desplegado | ⏳ | Vercel, ver `docs/guia-entrega.md` §7 |
+| Frontend desplegado | ⏳ | Vercel (pendiente); hoy se corre local con `npm run dev` |
