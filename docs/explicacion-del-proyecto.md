@@ -259,6 +259,8 @@ Una corrida inicial con 6 findings. Se corrigió `uninitialized-local` y se just
 
 Se probó de punta a punta con Playwright contra anvil, con dos cuentas.
 
+**Vercel y la alerta de MetaMask:** la versión publicada en `trustronda-n2.vercel.app` funciona, pero MetaMask marca el dominio como posible phishing y pide revisar una alerta antes de cada firma. Es un falso positivo: los dominios nuevos de `*.vercel.app` se usan mucho para imitar wallets. Por eso la demo del video usa el frontend local (`npm run dev`), con el mismo código y contra los mismos contratos.
+
 ---
 
 ## Decisiones de diseño (preguntas frecuentes)

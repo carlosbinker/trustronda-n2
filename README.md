@@ -5,7 +5,7 @@
 Proyecto final del *Ethereum Developer Pack, Nivel 2: Smart Contract Developer* (ETH Kipu / Talento Tech, 2026).
 Autor: Carlos Binker.
 
-**dApp en vivo (Sepolia): https://trustronda-n2.vercel.app** · necesita MetaMask en la red Sepolia.
+**dApp en vivo (Sepolia): https://trustronda-n2.vercel.app** · necesita MetaMask en la red Sepolia. MetaMask marca el dominio con una alerta de phishing (falso positivo, ver sección 8); para firmar transacciones conviene el frontend local.
 
 > Red: **Sepolia** · Contratos: **Solidity 0.8.24 + OpenZeppelin 5.1 + Chainlink VRF v2.5** · Framework: **Foundry** · Frontend: **React + Vite + wagmi/viem**
 > Tests: **67 pasan** · Coverage: **100 %** en líneas, statements, branches y funciones · Slither: **sin findings High ni Medium**
@@ -304,6 +304,8 @@ npm run dev                     # http://localhost:5173
 
 Frontend desplegado en Vercel: **https://trustronda-n2.vercel.app** (se redespliega solo con cada push a `main`; las mismas cinco variables están cargadas en el panel de Vercel).
 
+> **Alerta de MetaMask en Vercel.** MetaMask marca `trustronda-n2.vercel.app` como posible sitio de phishing: al conectar muestra *"Continue at your own risk"*, y en cada transacción, *"Request from ⚠ trustronda-n2.vercel.app"* con el botón **Review alert** en lugar de **Confirm**. No bloquea las transacciones, pero obliga a revisar la alerta antes de cada firma. Es un falso positivo de la detección de MetaMask sobre dominios nuevos de `*.vercel.app`, muy usados por sitios que imitan wallets: el código y los contratos son los mismos que en local. Para ver las rondas y el historial alcanza con abrir el sitio. Para firmar, la demo del video usa el frontend local (`npm run dev` → `http://localhost:5173`), que MetaMask no marca. La revisión del dominio se puede pedir en [eth-phishing-detect](https://github.com/MetaMask/eth-phishing-detect/issues). → Roadmap: dominio propio.
+
 ### Paso a paso en la dApp
 1. **Conectar wallet** (MetaMask en Sepolia; si está en otra red, aparece el botón para cambiar).
 2. **Pedir 1.000 tUSD de prueba** con el faucet.
@@ -436,6 +438,7 @@ Ronda [`0x01319B9C557c114dCFcb4Fd27791a3D43e031B16`](https://sepolia.etherscan.i
 | `forge lint` (1.8) | `block-timestamp` (×6) | Excluido en `foundry.toml`: mismo análisis que el `timestamp` de Slither (plazos, no aleatoriedad ni montos). |
 | `forge lint` (1.8) | `reentrancy-events` en `createRonda` y `requestDraw` | Aceptados, con comentario en el código: el evento necesita la dirección o el requestId que recién existen después de la llamada a un contrato confiable (la ronda recién creada o el coordinador de VRF). |
 | `forge lint` (1.8) | `reentrancy-no-eth` en `join` → `requestDraw` | Falso positivo: `join` tiene `nonReentrant`, la factory es `immutable` y el estado ya se escribió antes (CEI). Comentado en el código. |
+| MetaMask | Alerta de phishing sobre `trustronda-n2.vercel.app` ("Continue at your own risk" al conectar, "Review alert" en cada firma) | Falso positivo sobre un dominio nuevo `*.vercel.app`. No bloquea las transacciones. La demo se grabó con el frontend local (sección 8). → Roadmap: dominio propio. |
 | Vite | Chunk > 500 kB | viem + wagmi pesan unos 180 kB gzip. Es aceptable para una dApp de una página, así que se subió el umbral. |
 
 ---
@@ -464,6 +467,7 @@ Ronda [`0x01319B9C557c114dCFcb4Fd27791a3D43e031B16`](https://sepolia.etherscan.i
 - Rondas privadas por invitación (allowlist con firma EIP-712) y `permit` (EIP-2612) para ahorrar el `approve`.
 - Reputación on-chain: historial de rondas cumplidas como credencial (SBT).
 - Indexador con The Graph y notificaciones de vencimiento.
+- Frontend en un dominio propio, para no depender de `*.vercel.app` (que hoy dispara la alerta de phishing de MetaMask).
 
 **Seguridad y escalabilidad**
 - Auditoría externa y testing formal de las invariantes (Halmos o Certora).

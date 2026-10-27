@@ -103,10 +103,11 @@ Desplegado el 25/10/2026 y verificado en Etherscan y Sourcify (Exact Match):
 
 La factory es el único consumidor de una suscripción de VRF que paga en LINK. La ronda de la demo, de 2 miembros con aporte y garantía de 50 tUSD, recorrió el ciclo completo on-chain: creación, inscripciones, pedido y respuesta del sorteo de VRF, dos turnos con aportes y cierres, y los retiros de pozos y garantías. Terminó en `Completed` con **saldo 0**, la ecuación de solvencia de la sección 3.3 cumplida en la red real. Las 21 transacciones están en la sección 10 del README.
 
-El deploy dejó dos datos que el diseño tiene que tener en cuenta:
+El deploy dejó tres datos que el diseño tiene que tener en cuenta:
 
 - **Glamsterdam** (EIP-8037, activo en Sepolia desde el 06/10/2026) multiplicó el costo de crear código y de escribir celdas nuevas de storage. `createRonda` cuesta 10,95 M de gas (desplegar la factory, 18,6 M) y el sorteo de 12 miembros, 372 k. Por eso `CALLBACK_GAS_LIMIT` pasó de 300 k a 500 k, y los tests corren también con esas reglas (`make test-amsterdam`).
 - **VRF reserva el costo máximo, no el real.** El coordinador solo responde si la suscripción cubre el callback al gas price tope del key hash (500 gwei): con 500 k de límite, eran 75,57 LINK. El primer pedido quedó pendiente con 10 LINK y se resolvió fondeando a 100. El cobro real fue una fracción, porque el gas estaba en ~0,05 gwei.
+- **La alerta de phishing de MetaMask.** El frontend publicado en `trustronda-n2.vercel.app` funciona, pero MetaMask marca el dominio como sospechoso: al conectar y antes de cada firma pide revisar una alerta. No bloquea las transacciones, pero para usuarios no técnicos es una barrera de confianza. Es un falso positivo sobre dominios nuevos de `*.vercel.app`; la demo se hizo con el frontend local, y para producción hace falta un dominio propio.
 
 ## 4. Seguridad y riesgos
 
@@ -170,7 +171,7 @@ El deploy dejó dos datos que el diseño tiene que tener en cuenta:
 
 ### 5.6 Riesgos de negocio
 - **Regulatorio:** juntar ahorro de terceros puede estar regulado, según el país (en Argentina, por ejemplo, la captación de ahorro y los sistemas de ahorro previo). Antes de operar con fondos reales hace falta análisis legal. El diseño sin custodio intermedio ayuda, pero no lo resuelve solo.
-- **Adopción:** wallets y stablecoins siguen siendo una barrera para parte del público objetivo → onboarding con login social y account abstraction (fase 3).
+- **Adopción:** wallets y stablecoins siguen siendo una barrera para parte del público objetivo → onboarding con login social y account abstraction (fase 3). Las alertas de seguridad de las wallets también pesan: un dominio nuevo puede quedar marcado como sospechoso, como pasó con el de Vercel (sección 3.4) → dominio propio y reputación del sitio.
 - **Riesgo de la stablecoin:** depeg o congelamiento de fondos por parte del emisor.
 - **Incentivo del que ya cobró:** se mitiga con la garantía y, en el roadmap, con garantía dinámica y reputación.
 
@@ -185,7 +186,7 @@ El deploy dejó dos datos que el diseño tiene que tener en cuenta:
 |---|---|---|
 | **Fase 1 (este MVP)** | Factory, ronda con garantía, **sorteo con Chainlink VRF v2.5**, tUSD, frontend, deploy verificado en Sepolia | Demostrar el flujo completo de punta a punta |
 | **Fase 2: robustez** | Cierre automático con **Chainlink Automation**; garantía proporcional a los turnos restantes; exclusión del moroso; comisión que financie la suscripción de VRF | Cerrar los riesgos 1 a 3 |
-| **Fase 3: producto** | USDC real en una L2 (Base o Arbitrum); rondas privadas con allowlist EIP-712; `permit` (EIP-2612); reputación on-chain (SBT); indexador con The Graph | Costo por transacción bajo, UX y confianza entre desconocidos |
+| **Fase 3: producto** | USDC real en una L2 (Base o Arbitrum); rondas privadas con allowlist EIP-712; `permit` (EIP-2612); reputación on-chain (SBT); indexador con The Graph; frontend en dominio propio | Costo por transacción bajo, UX y confianza entre desconocidos |
 | **Transversal** | Auditoría externa; verificación formal de la invariante de solvencia; clones EIP-1167 en la factory | Seguridad y costo de creación |
 
 ## 7. Conclusión

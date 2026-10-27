@@ -91,4 +91,4 @@ Estado al 25/10/2026, con los contratos desplegados y verificados en Sepolia y l
 ## H. Opcional
 | Ítem | Estado | Evidencia |
 |---|---|---|
-| Frontend desplegado | ✅ | https://trustronda-n2.vercel.app (Vercel) |
+| Frontend desplegado | ✅ | https://trustronda-n2.vercel.app (Vercel). MetaMask muestra una alerta de phishing sobre el dominio (falso positivo, ver README, sección 8); la demo del video usa el frontend local |
