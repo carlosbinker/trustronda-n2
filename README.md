@@ -29,6 +29,7 @@ Autor: Carlos Binker.
 13. [Limitaciones conocidas del MVP](#13-limitaciones-conocidas-del-mvp)
 14. [Roadmap](#14-roadmap)
 15. [Documentación adicional](#15-documentación-adicional)
+16. [Uso de herramientas de IA](#16-uso-de-herramientas-de-ia)
 
 ---
 
@@ -482,6 +483,22 @@ Ronda [`0x01319B9C557c114dCFcb4Fd27791a3D43e031B16`](https://sepolia.etherscan.i
 - [`docs/explicacion-del-proyecto.md`](docs/explicacion-del-proyecto.md): explicación detallada de cada parte del código.
 - [`docs/slither.md`](docs/slither.md): informe de análisis estático.
 - [`docs/checklist-entrega.md`](docs/checklist-entrega.md): estado de cada ítem del checklist de la cátedra, con su evidencia.
+
+---
+
+## 16. Uso de herramientas de IA
+
+Este proyecto fue desarrollado de forma individual, con **Claude** (Anthropic) como herramienta de asistencia. Las tareas en las que se utilizó fueron:
+
+- **Repaso de contenidos** del curso (Solidity avanzado, testing con Foundry, seguridad y auditoría).
+- **Contratos**: asistencia en la implementación de los contratos en Solidity.
+- **Revisión de código**: sugerencias sobre patrones de seguridad (CEI, custom errors, SafeERC20, control de acceso) y verificación contra el checklist de la cátedra.
+- **Tests**: generación de la suite de tests en Foundry (unitarios, fuzzing e invariantes).
+- **Análisis estático**: análisis y justificación de los findings de Slither.
+- **Frontend**: generación del código de la interfaz.
+- **Documentación**: apoyo en la redacción y estructura del README, el whitepaper y los comentarios NatSpec.
+
+Las decisiones de diseño del protocolo fueron tomadas por el autor. Todo el código generado con asistencia de IA fue revisado, ejecutado y validado por el autor, que asume la autoría y la responsabilidad técnica del proyecto. Los resultados de tests, coverage y Slither reportados en este documento corresponden a ejecuciones reales realizadas por el autor, y el despliegue y la verificación de los contratos los realizó el autor.
 
 ## Licencia
 
